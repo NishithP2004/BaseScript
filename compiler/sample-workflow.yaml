@@ -1,0 +1,29 @@
+framework: puppeteer
+browser: 
+  mode: launch
+  launch:
+    headless: false
+    viewport:
+      width: 1920
+      height: 1080
+
+steps:
+  - newPage: true
+  - emulate:
+      device: "iPhone SE"
+  - goto: 
+      url: "https://nishithp.page"
+      waitUntil: "networkidle0"
+  - waitForSelector:
+      selector: "input[type='text']"
+  - type:
+      selector: "input[type='text']"
+      text: "help"
+      delay: 100ms
+  - press:
+      key: "Enter"
+  - wait:
+      timeout: 15s
+  - screenshot:
+      path: screenshots/screenshot.png
+  - close: true

@@ -1,0 +1,58 @@
+services:
+    compiler:
+      image: nishithp/basescript-compiler
+      restart: always
+      ports:
+        - 3000:3000
+      build: ./compiler
+      env_file: ./compiler/.env
+      networks:
+        - bs-net
+        
+    redis:
+      image: redis
+      restart: always
+      ports:
+        - 6379:6379
+      volumes:
+        - redis_data:/data
+      networks:
+        - bs-net
+    
+    browser:
+      image: nishithp/basescript-browser
+      restart: always
+      ports:
+        - 9222:9222     # Direct Chrome DevTools access
+        - 8080:8080     # Caddy reverse proxy
+        - 7900:7900     # VNC
+      build: ./browser
+      environment:
+        - REDIS_HOST=redis
+        - REDIS_PORT=6379
+      networks:
+        - bs-net
+      depends_on: 
+        - redis
+    
+    playground:
+      image: nishithp/basescript-playground
+      restart: always
+      ports:
+        - 80:80
+      build: ./playground
+      environment:
+        - VITE_BACKEND_URL=http://localhost:3000
+      networks:
+        - bs-net
+      depends_on:
+        - browser
+        - redis
+        - compiler
+    
+volumes:
+  redis_data:
+
+networks:
+  bs-net:
+    driver: bridge

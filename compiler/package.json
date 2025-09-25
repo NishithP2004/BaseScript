@@ -1,0 +1,23 @@
+{
+  "name": "base-script-interpreter",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "type": "module",
+  "author": "Nishith P",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "playwright": "^1.55.0",
+    "puppeteer": "^24.22.0",
+    "redis": "^5.8.2",
+    "selenium-webdriver": "^4.35.0",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.11"
+  }
+}
