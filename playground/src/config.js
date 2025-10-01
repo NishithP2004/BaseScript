@@ -6,4 +6,5 @@ export const API_ENDPOINTS = {
   RUN: `${BACKEND_URL}/run`,
   SCREENSHOTS: `${BACKEND_URL}/screenshots`,
   SCREENSHOT_FILE: (filename) => `${BACKEND_URL}/${filename}`,
+  DELETE_SCREENSHOT: (filename) => `${BACKEND_URL}/screenshots/${filename}`,
 };

@@ -4,6 +4,7 @@ import {
   ArrowDownTrayIcon,
   XMarkIcon,
   MagnifyingGlassIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import { API_ENDPOINTS } from "../config";
 
@@ -13,6 +14,8 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
   const [error, setError] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const glassPanelClasses = isDarkMode
     ? "backdrop-blur-xl bg-slate-900/70 border border-slate-800/70 shadow-xl"
@@ -52,6 +55,41 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const deleteScreenshot = async (filename) => {
+    setDeleting(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.DELETE_SCREENSHOT(filename), {
+        method: "DELETE",
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to delete screenshot: ${response.status}`);
+      }
+      
+      // Remove from local state
+      setScreenshots(prev => prev.filter(file => file !== filename));
+      
+      // Close preview if it was the deleted image
+      if (selectedImage === filename) {
+        setSelectedImage(null);
+      }
+      
+      // Close confirmation dialog
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error("Error deleting screenshot:", err);
+      setError(err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteClick = (filename, e) => {
+    e.stopPropagation();
+    setDeleteConfirm(filename);
   };
 
   const filteredScreenshots = screenshots.filter((filename) =>
@@ -94,7 +132,7 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
                 isDarkMode
                   ? "text-slate-300 hover:text-sky-300"
                   : "text-slate-600 hover:text-sky-600"
-              } transition-all transform hover:scale-105 active:scale-95`}
+              } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
               title="Close"
             >
               <XMarkIcon className="w-5 h-5" />
@@ -142,7 +180,7 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
                   <p className={`text-sm ${tertiaryTextColor} mb-4`}>{error}</p>
                   <button
                     onClick={fetchScreenshots}
-                    className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-all"
+                    className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-all cursor-pointer"
                   >
                     Retry
                   </button>
@@ -186,16 +224,23 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
                       >
                         <PhotoIcon className="w-8 h-8 text-slate-400" />
                       </div>
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             downloadScreenshot(filename);
                           }}
-                          className="p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition-all"
+                          className="p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition-all cursor-pointer"
                           title="Download"
                         >
                           <ArrowDownTrayIcon className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteClick(filename, e)}
+                          className="p-2 bg-red-500/80 backdrop-blur-sm rounded-full text-white hover:bg-red-600/90 transition-all cursor-pointer"
+                          title="Delete"
+                        >
+                          <TrashIcon className="w-5 h-5" />
                         </button>
                       </div>
                     </div>
@@ -239,10 +284,21 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
                       isDarkMode
                         ? "text-slate-300 hover:text-sky-300"
                         : "text-slate-600 hover:text-sky-600"
-                    } transition-all`}
+                    } transition-all cursor-pointer`}
                     title="Download"
                   >
                     <ArrowDownTrayIcon className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(selectedImage)}
+                    className={`p-2 rounded-lg ${glassPanelClasses} ${
+                      isDarkMode
+                        ? "text-red-300 hover:text-red-200"
+                        : "text-red-600 hover:text-red-700"
+                    } transition-all cursor-pointer`}
+                    title="Delete"
+                  >
+                    <TrashIcon className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setSelectedImage(null)}
@@ -250,7 +306,7 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
                       isDarkMode
                         ? "text-slate-300 hover:text-sky-300"
                         : "text-slate-600 hover:text-sky-600"
-                    } transition-all`}
+                    } transition-all cursor-pointer`}
                     title="Close"
                   >
                     <XMarkIcon className="w-5 h-5" />
@@ -263,6 +319,81 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
                   alt={selectedImage}
                   className="max-w-full max-h-[70vh] object-contain rounded-lg"
                 />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-70">
+          <div
+            className="absolute inset-0 bg-black/70"
+            onClick={() => setDeleteConfirm(null)}
+          ></div>
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div
+              className={`${glassPanelClasses} max-w-md w-full rounded-2xl overflow-hidden shadow-2xl`}
+            >
+              <div
+                className={`px-6 py-4 border-b ${
+                  isDarkMode ? "border-slate-800/60" : "border-slate-200/70"
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                    <TrashIcon className="w-6 h-6 text-red-500" />
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-semibold ${primaryTextColor}`}>
+                      Delete Screenshot
+                    </h3>
+                    <p className={`text-sm ${tertiaryTextColor}`}>
+                      This action cannot be undone
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="px-6 py-4">
+                <p className={`text-sm ${secondaryTextColor} mb-2`}>
+                  Are you sure you want to delete:
+                </p>
+                <p className={`font-medium ${primaryTextColor} mb-4 break-all`}>
+                  {deleteConfirm}
+                </p>
+                
+                <div className="flex items-center justify-end space-x-3">
+                  <button
+                    onClick={() => setDeleteConfirm(null)}
+                    className={`px-4 py-2 rounded-lg ${
+                      isDarkMode
+                        ? "bg-slate-700 text-slate-200 hover:bg-slate-600"
+                        : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                    } transition-all cursor-pointer`}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => deleteScreenshot(deleteConfirm)}
+                    disabled={deleting}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center space-x-2"
+                  >
+                    {deleting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                        <span>Deleting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <TrashIcon className="w-4 h-4" />
+                        <span>Delete</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

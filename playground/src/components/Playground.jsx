@@ -4,7 +4,7 @@ import { yaml } from "@codemirror/lang-yaml";
 import { javascript } from "@codemirror/lang-javascript";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { duotoneDark, duotoneLight } from "@uiw/codemirror-theme-duotone";
-import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
+import { githubLight } from "@uiw/codemirror-theme-github";
 import { nord } from "@uiw/codemirror-theme-nord";
 import { tokyoNight } from "@uiw/codemirror-theme-tokyo-night";
 import { tokyoNightStorm } from "@uiw/codemirror-theme-tokyo-night-storm";
@@ -24,7 +24,9 @@ import { dracula } from "@uiw/codemirror-theme-dracula";
 import { solarizedDark, solarizedLight } from "@uiw/codemirror-theme-solarized";
 import examples from "../examples";
 import ScreenshotsViewer from "./ScreenshotsViewer";
+import Terminal from "./Terminal";
 import { API_ENDPOINTS } from "../config";
+import { useAllPreferences } from "../hooks/usePreferences";
 import {
   PlayIcon,
   StopIcon,
@@ -37,6 +39,7 @@ import {
   ArrowsPointingOutIcon,
   XMarkIcon,
   PhotoIcon,
+  CommandLineIcon,
 } from "@heroicons/react/24/outline";
 
 function Playground() {
@@ -54,7 +57,28 @@ steps:
   - close: true`;
 
   const [value, setValue] = useState(boilerplate);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  
+  // Use preferences hook for persistent state
+  const {
+    isDarkMode,
+    setIsDarkMode,
+    selectedThemeId,
+    setSelectedThemeId,
+    showVNC,
+    setShowVNC,
+    showScreenshots,
+    setShowScreenshots,
+    showTerminal,
+    setShowTerminal,
+    isVncZoomed,
+    setIsVncZoomed,
+    activeTab,
+    setActiveTab,
+  } = useAllPreferences();
+
+
+  // Ensure activeTab is always set to a valid value
+  const currentActiveTab = activeTab || 'script';
   const availableThemes = useMemo(
     () => [
       { id: "dracula", label: "Dracula", theme: dracula, appearance: "dark" },
@@ -84,42 +108,17 @@ steps:
     []
   );
 
-  const [selectedThemeId, setSelectedThemeId] = useState("dracula");
   const selectedTheme = useMemo(
     () => availableThemes.find((item) => item.id === selectedThemeId) ?? availableThemes[0],
     [availableThemes, selectedThemeId]
   );
   const [isRunning, setIsRunning] = useState(false);
-  const [showVNC, setShowVNC] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [executionResult, setExecutionResult] = useState(null);
-  const [executionError, setExecutionError] = useState(null);
-  const [isVncZoomed, setIsVncZoomed] = useState(false);
-  const [showScreenshots, setShowScreenshots] = useState(false);
-  const [activeTab, setActiveTab] = useState("script"); // "script" or "compiled"
+  const [, setExecutionResult] = useState(null);
+  const [, setExecutionError] = useState(null);
   const [compiledCode, setCompiledCode] = useState("");
 
-  // Restore last zoom state on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("vncZoom");
-      if (saved === "true") {
-        setIsVncZoomed(true);
-      }
-    } catch (_) {
-      // ignore storage errors
-    }
-  }, []);
-
-  // Persist zoom state
-  useEffect(() => {
-    try {
-      localStorage.setItem("vncZoom", isVncZoomed ? "true" : "false");
-    } catch (_) {
-      // ignore storage errors
-    }
-  }, [isVncZoomed]);
 
   // ESC key closes zoom
   useEffect(() => {
@@ -131,9 +130,9 @@ steps:
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isVncZoomed]);
+  }, [isVncZoomed, setIsVncZoomed]);
 
-  const onChange = useCallback((val, viewUpdate) => {
+  const onChange = useCallback((val) => {
     setValue(val);
   }, []);
 
@@ -251,7 +250,7 @@ steps:
         <div className="flex items-center space-x-6">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-xl">B</span>
+              <span className="text-white font-bold text-xl">BS</span>
             </div>
             <div>
               <h1
@@ -285,7 +284,7 @@ steps:
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4">
           {/* Example Scripts Dropdown */}
           <select
             onChange={(e) => loadExample(e.target.value)}
@@ -324,13 +323,14 @@ steps:
             </option>
           </select>
 
+
           {/* Control Buttons */}
           <div className="flex items-center space-x-2">
             <button
               onClick={copyToClipboard}
               className={`p-3 rounded-lg ${glassPanelClasses} ${
                 isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"
-              } transition-all transform hover:scale-105 active:scale-95`}
+              } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
               title="Copy to clipboard"
             >
               {copied ? (
@@ -344,17 +344,27 @@ steps:
               onClick={() => setShowScreenshots(true)}
               className={`p-3 rounded-lg ${glassPanelClasses} ${
                 isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"
-              } transition-all transform hover:scale-105 active:scale-95`}
+              } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
               title="View Screenshots"
             >
               <PhotoIcon className="w-5 h-5" />
             </button>
 
             <button
+              onClick={() => setShowTerminal(true)}
+              className={`p-3 rounded-lg ${glassPanelClasses} ${
+                isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"
+              } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
+              title="Open Terminal"
+            >
+              <CommandLineIcon className="w-5 h-5" />
+            </button>
+
+            <button
               onClick={() => setShowVNC(!showVNC)}
               className={`p-3 rounded-lg ${glassPanelClasses} ${
                 isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"
-              } transition-all transform hover:scale-105 active:scale-95`}
+              } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
               title={showVNC ? "Hide VNC" : "Show VNC"}
             >
               {showVNC ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
@@ -367,7 +377,7 @@ steps:
                   isDarkMode
                     ? "text-slate-200 hover:text-sky-300"
                     : "text-slate-700 hover:text-sky-600"
-                } transition-all transform hover:scale-105 active:scale-95`}
+                } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
                 title="Toggle theme"
               >
                 {isDarkMode ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
@@ -378,7 +388,7 @@ steps:
           {!isRunning ? (
             <button
               onClick={handleRun}
-              className="flex items-center space-x-2 px-4 py-3 bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-500 text-white rounded-lg hover:from-sky-500/90 hover:via-cyan-500/90 hover:to-emerald-500/90 transition-all transform hover:scale-105 active:scale-95 shadow-lg ml-2"
+              className="flex items-center space-x-2 px-4 py-3 bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-500 text-white rounded-lg hover:from-sky-500/90 hover:via-cyan-500/90 hover:to-emerald-500/90 transition-all transform hover:scale-105 active:scale-95 shadow-lg ml-2 cursor-pointer"
               title="Run Script"
             >
               <PlayIcon className="w-5 h-5" />
@@ -386,7 +396,7 @@ steps:
           ) : (
             <button
               onClick={handleStop}
-              className="flex items-center space-x-2 px-4 py-3 bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-white rounded-lg hover:from-rose-500/90 hover:via-orange-500/90 hover:to-amber-500/90 transition-all transform hover:scale-105 active:scale-95 shadow-lg ml-2"
+              className="flex items-center space-x-2 px-4 py-3 bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-white rounded-lg hover:from-rose-500/90 hover:via-orange-500/90 hover:to-amber-500/90 transition-all transform hover:scale-105 active:scale-95 shadow-lg ml-2 cursor-pointer"
               title="Stop"
             >
               <StopIcon className="w-5 h-5" />
@@ -413,7 +423,7 @@ steps:
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setIsVncZoomed(true)}
-                  className={`p-2 rounded-lg ${glassPanelClasses} ${isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"} transition-all transform hover:scale-105 active:scale-95`}
+                  className={`p-2 rounded-lg ${glassPanelClasses} ${isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"} transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
                   title="Zoom VNC"
                 >
                   <ArrowsPointingOutIcon className="w-5 h-5" />
@@ -483,8 +493,8 @@ steps:
                 }`}>
                   <button
                     onClick={() => setActiveTab("script")}
-                    className={`p-3 rounded-md transition-all ${
-                      activeTab === "script"
+                    className={`p-3 rounded-md transition-all cursor-pointer ${
+                      currentActiveTab === "script"
                         ? isDarkMode
                           ? "bg-slate-700 text-white shadow-sm"
                           : "bg-white text-slate-900 shadow-sm"
@@ -502,14 +512,14 @@ steps:
                     className={`p-3 rounded-md transition-all relative ${
                       !compiledCode
                         ? "opacity-50 cursor-not-allowed"
-                        : activeTab === "compiled"
+                        : currentActiveTab === "compiled"
                         ? isDarkMode
                           ? "bg-slate-700 text-white shadow-sm"
                           : "bg-white text-slate-900 shadow-sm"
                         : isDarkMode
                         ? "text-slate-300 hover:text-slate-100"
                         : "text-slate-600 hover:text-slate-900"
-                    }`}
+                    } ${compiledCode ? 'cursor-pointer' : ''}`}
                     title="Compiled Code"
                   >
                     🔧
@@ -563,7 +573,7 @@ steps:
 
           {/* Editor Content */}
           <div className={`flex-1 overflow-hidden ${primaryTextColor}`}>
-            {activeTab === "script" ? (
+            {currentActiveTab === "script" ? (
               <CodeMirror
                 value={value}
                 height="100%"
@@ -625,7 +635,7 @@ steps:
                 <span className="flex items-center space-x-1" title="Lines">
                   <span>📝</span>
                   <span>
-                    {activeTab === "script" 
+                    {currentActiveTab === "script" 
                       ? value.split("\n").length 
                       : compiledCode.split("\n").length
                     }
@@ -634,17 +644,17 @@ steps:
                 <span className="flex items-center space-x-1" title="Characters">
                   <span>💭</span>
                   <span>
-                    {activeTab === "script" 
+                    {currentActiveTab === "script" 
                       ? value.length 
                       : compiledCode.length
                     }
                   </span>
                 </span>
-                <span className="flex items-center space-x-1" title={activeTab === "script" ? "YAML" : "JavaScript"}>
+                <span className="flex items-center space-x-1" title={currentActiveTab === "script" ? "YAML" : "JavaScript"}>
                   <span>🔧</span>
-                  <span>{activeTab === "script" ? "YAML" : "JS"}</span>
+                  <span>{currentActiveTab === "script" ? "YAML" : "JS"}</span>
                 </span>
-                {activeTab === "compiled" && (
+                {currentActiveTab === "compiled" && (
                   <span className="flex items-center space-x-1" title="Read-only">
                     <span>🔒</span>
                   </span>
@@ -673,7 +683,7 @@ steps:
                 <h3 className={`text-lg font-semibold ${primaryTextColor}`}>VNC Zoom</h3>
                 <button
                   onClick={() => setIsVncZoomed(false)}
-                  className={`p-2 rounded-lg ${glassPanelClasses} ${isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"}`}
+                  className={`p-2 rounded-lg ${glassPanelClasses} ${isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"} cursor-pointer`}
                   title="Close"
                 >
                   <XMarkIcon className="w-5 h-5" />
@@ -716,6 +726,13 @@ steps:
       <ScreenshotsViewer
         isOpen={showScreenshots}
         onClose={() => setShowScreenshots(false)}
+        isDarkMode={isDarkMode}
+      />
+
+      {/* Terminal Modal */}
+      <Terminal
+        isOpen={showTerminal}
+        onClose={() => setShowTerminal(false)}
         isDarkMode={isDarkMode}
       />
     </div>

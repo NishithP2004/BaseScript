@@ -45,9 +45,7 @@ const stepsSchema = z.object({
         selector: z.string()
     }).optional(),
     baseline_scan: z.object({
-        highlight: z.boolean().default(true),
-        report: z.string(),
-        availability: z.enum(["high", "low", "medium"]),
+        availability: z.array(z.enum(["high", "low", "false"])),
         year: z.number()
     }).optional(),
     assert: z.object({

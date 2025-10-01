@@ -4,28 +4,10 @@ import {
 } from "./parser.js"
 import fs from "node:fs"
 import {
-    execSync
+    execSync,
+    spawn
 } from "node:child_process"
-
-function parseTimeout(delay) {
-    const re = /(?<digit>\d+)(?<unit>ms|s|m)*/;
-    let m = delay.match(re)
-    let d = parseInt(m.groups.digit)
-    let unit = m.groups.unit
-    let timeout = d;
-    switch (unit) {
-        case "s":
-            timeout *= 1000;
-            break;
-        case "m":
-            timeout *= 60 * 1000;
-            break;
-        case "ms":
-        default:
-            break;
-    }
-    return timeout
-}
+import { parseTimeout } from "./utils.js";
 
 // Base handler class
 class FrameworkHandler {
@@ -42,27 +24,7 @@ class FrameworkHandler {
     }
 
     getAdditionalCode() {
-        return `
-function parseTimeout(delay) {
-    const re = /(?<digit>\\d+)(?<unit>ms|s|m)*/;
-    let m = delay.match(re)
-    let d = parseInt(m.groups.digit)
-    let unit = m.groups.unit
-    let timeout = d;
-    switch(unit) {
-        case "s": timeout *= 1000; break;
-        case "m": timeout *= 60 * 1000; break;
-        case "ms":
-        default: break;
-    }
-    return timeout
-}
-
-async function sleep(delay) {
-    let timeout = parseTimeout(delay)
-    return new Promise((resolve) => setTimeout(resolve, timeout))
-}
-`
+        return `import { parseTimeout, sleep } from "./utils.js";\nimport { baselineScanPipeline } from "./baseline.js";\n`
     }
 }
 
@@ -73,7 +35,7 @@ class PuppeteerHandler extends FrameworkHandler {
     }
 
     handleFramework() {
-        return `import puppeteer, { KnownDevices } from "puppeteer"\nlet page, browser;\n${this.getAdditionalCode()}\n${this.getAssertionCode()}\n`
+        return `${this.getAdditionalCode()}\nimport puppeteer, { KnownDevices } from "puppeteer";\nlet page, browser;\n${this.getAssertionCode()}\n`
     }
 
     handleBrowser(value) {
@@ -137,6 +99,10 @@ class PuppeteerHandler extends FrameworkHandler {
         return `await checkAssertion(page, ${JSON.stringify(value, null, 2)})\n`
     }
 
+    handleBaseline_scan(value) {
+        return `await baselineScanPipeline(page, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed' })}, 'puppeteer');\n`
+    }
+
     handleEOF(value) {
         return ((value.operation === "close") ? `await browser.close()\n` : `await browser.disconnect()\n`)
     }
@@ -166,7 +132,7 @@ class PlaywrightHandler extends FrameworkHandler {
     }
 
     handleFramework() {
-        return `import { chromium, firefox, webkit } from 'playwright'\nlet page, browser, context;\n${this.getAdditionalCode()}\n${this.getAssertionCode()}\n`
+        return `${this.getAdditionalCode()}\nimport { chromium, firefox, webkit } from 'playwright'\nlet page, browser, context;\n${this.getAssertionCode()}\n`
     }
 
     handleBrowser(value) {
@@ -230,6 +196,10 @@ class PlaywrightHandler extends FrameworkHandler {
         return `await checkAssertion(page, ${JSON.stringify(value, null, 2)})\n`
     }
 
+    handleBaseline_scan(value) {
+        return `await baselineScanPipeline(page, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed' })}, 'playwright');\n`
+    }
+
     handleEOF(value) {
         return ((value.operation === "close") ? `await browser.close()\n` : `await browser.disconnect()\n`)
     }
@@ -259,7 +229,7 @@ class SeleniumHandler extends FrameworkHandler {
     }
 
     handleFramework() {
-        return `import { Builder, By, until } from 'selenium-webdriver'\nlet driver;\n${this.getAdditionalCode()}\n${this.getAssertionCode()}\n`
+        return `${this.getAdditionalCode()}\nimport { Builder, By, until } from 'selenium-webdriver'\nlet driver;\n${this.getAssertionCode()}\n`
     }
 
     handleBrowser(value) {
@@ -322,6 +292,10 @@ class SeleniumHandler extends FrameworkHandler {
         return `await checkAssertion(driver, ${JSON.stringify(value, null, 2)})\n`
     }
 
+    handleBaseline_scan(value) {
+        return `await baselineScanPipeline(driver, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed' })}, 'selenium');\n`
+    }
+
     handleEOF(value) {
         return ((value.operation === "close") ? `await driver.quit()\n` : `await driver.close()\n`)
     }
@@ -366,28 +340,50 @@ function compile(ir) {
         const generatedCode = handler.handle(line.cmd, line.value)
         if (generatedCode) {
             code += generatedCode
+            code += `console.log("✅ Step ${line.cmd}")\n`
         }
     }
 
     return code
 }
 
-function run(code) {
+async function spawnChildProcess(io) {
+    const ps = spawn("node", ["output.js"])
+    return new Promise((resolve, reject) => {
+        ps.stdout.on("data", chunk => {
+            io.to("output-stream").emit("output", Buffer.from(chunk).toString("utf-8"))
+        })
+
+        ps.stderr.on("data", chunk => {
+            io.to("output-stream").emit("output", Buffer.from(chunk).toString("utf-8"))
+        })
+
+        ps.on("close", code => {
+            io.to("output-stream").emit("output", `Child process exited with code: ${code}`)
+            resolve()
+        })
+    })
+}
+
+async function run(code, io) {
     try {
         const parsed = parse(code)
-        const ir = generateIR(parsed)
 
+        const ir = generateIR(parsed)
         console.log("Intermediate Representation (IR): ")
         console.table(ir)
 
-        console.log("Compiler Output: ")
         const compiled = compile(ir)
+        console.log("Compiler Output: ")
         console.log(compiled)
 
         fs.writeFileSync("output.js", compiled)
-        execSync("node output.js", {
+
+        /* execSync("node output.js", {
             encoding: "utf-8"
-        })
+        }) */
+
+        await spawnChildProcess(io) 
         
         return compiled
     } catch (err) {

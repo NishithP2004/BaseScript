@@ -1,7 +1,7 @@
 services:
     compiler:
       image: nishithp/basescript-compiler
-      restart: always
+      restart: unless-stopped
       ports:
         - 3000:3000
       build: ./compiler
@@ -11,7 +11,7 @@ services:
         
     redis:
       image: redis
-      restart: always
+      restart: unless-stopped
       ports:
         - 6379:6379
       volumes:
@@ -21,7 +21,7 @@ services:
     
     browser:
       image: nishithp/basescript-browser
-      restart: always
+      restart: unless-stopped
       ports:
         - 9222:9222     # Direct Chrome DevTools access
         - 8080:8080     # Caddy reverse proxy
@@ -37,7 +37,7 @@ services:
     
     playground:
       image: nishithp/basescript-playground
-      restart: always
+      restart: unless-stopped
       ports:
         - 80:80
       build: ./playground
