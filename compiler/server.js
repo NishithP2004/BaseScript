@@ -16,7 +16,6 @@ const app = express()
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(express.raw({ limit: "5mb", type: "text/plain" }))
-app.use(express.static("screenshots"))
 app.use(cors())
 
 const server = http.createServer(app)
@@ -47,6 +46,8 @@ app.get("/screenshots", (req, res) => {
     }
 })
 
+app.use("/screenshots", express.static("screenshots"))
+
 app.delete("/screenshots/:filename", (req, res) => {
     try {
         const { filename } = req.params;
@@ -74,8 +75,14 @@ app.delete("/screenshots/:filename", (req, res) => {
 app.post("/run", async (req, res) => {
     try {
         let code = req.body.toString("utf-8");
-        let wsUrl = (await redis.get("CHROME_CDP_URL")).replace("localhost:9222", "browser:8080")
-        code = code.replace("ws://browser:9222", wsUrl)
+        const mode = code.match(/mode: (?<mode>(connect|launch))/)?.groups.mode
+
+        if (mode === "connect") {
+            const framework = code.match(/framework: (?<framework>(puppeteer|playwright|selenium))/)?.groups.framework || "puppeteer"
+            let wsUrl = (framework === "selenium")? "http://browser:4444": (await redis.get("CHROME_CDP_URL")).replace("localhost:9222", "browser:8080")
+            code = code.replace("ws://browser:9222", wsUrl)
+        }
+
         const compiled = await run(code, io)
         res.status(201).send(compiled)
     } catch (err) {

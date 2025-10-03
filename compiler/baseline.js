@@ -3,655 +3,246 @@ import { features } from 'web-features';
 import { sleep } from './utils.js';
 
 /**
- * Extracts the baseline year from feature status data
- * @param {Object} status - The status object from web-features
- * @returns {string|null} - The baseline year or null if not available
+ * Extracts the baseline year from a feature's status data.
+ * @param {Object} status - The status object from a web-features entry.
+ * @returns {string|null} The baseline year as a string, or null if unavailable.
  */
 function getBaselineYear(status) {
     if (!status) return null;
-
-    // Try high baseline date first, then low baseline date
     const dateStr = status.baseline_high_date || status.baseline_low_date;
-    if (dateStr) {
-        return new Date(dateStr).getFullYear().toString();
-    }
-
-    return null;
+    return dateStr ? new Date(dateStr).getFullYear().toString() : null;
 }
 
 /**
- * Extracts browser compatibility information from feature data
- * @param {Object} featureData - The feature data from web-features
- * @returns {Object} - Browser compatibility information
+ * Extracts browser compatibility information from a feature's data.
+ * @param {Object} featureData - The feature data object from web-features.
+ * @returns {Object} An object with browser names and their first supported version.
  */
 function getBrowserCompatInfo(featureData) {
-    const browserCompat = {
-        chrome: null,
-        firefox: null,
-        safari: null,
-        edge: null
-    };
+    const browserCompat = { chrome: null, firefox: null, safari: null, edge: null };
+    if (!featureData?.status?.support) return browserCompat;
 
-    if (!featureData || !featureData.status || !featureData.status.support) return browserCompat;
-
-    const support = featureData.status.support;
-
-    // Map web-features browser names to our display names
     const browserMap = {
-        'chrome': 'chrome',
-        'chrome_android': 'chrome',
-        'firefox': 'firefox',
-        'firefox_android': 'firefox',
-        'safari': 'safari',
-        'safari_ios': 'safari',
+        'chrome': 'chrome', 'chrome_android': 'chrome',
+        'firefox': 'firefox', 'firefox_android': 'firefox',
+        'safari': 'safari', 'safari_ios': 'safari',
         'edge': 'edge'
     };
 
-    for (const [browserKey, version] of Object.entries(support)) {
+    for (const [browserKey, version] of Object.entries(featureData.status.support)) {
         const mappedBrowser = browserMap[browserKey];
         if (mappedBrowser && version && typeof version === 'string') {
-            // Take the earliest version if we have multiple entries for the same browser
-            if (!browserCompat[mappedBrowser] || parseFloat(version) < parseFloat(browserCompat[mappedBrowser])) {
+            const existingVersion = parseFloat(browserCompat[mappedBrowser]);
+            const newVersion = parseFloat(version);
+            if (!browserCompat[mappedBrowser] || newVersion < existingVersion) {
                 browserCompat[mappedBrowser] = version;
             }
         }
     }
-
     return browserCompat;
 }
 
 /**
- * Gets a user-friendly browser compatibility summary
- * @param {Object} browserCompat - Browser compatibility object
- * @returns {string} - Human readable compatibility summary
+ * Generates a user-friendly browser compatibility summary string.
+ * @param {Object} browserCompat - The browser compatibility object from getBrowserCompatInfo.
+ * @returns {string} A summary like "Good browser support".
  */
 function getBrowserCompatSummary(browserCompat) {
     if (!browserCompat) return "Unknown browser support";
+    const supportedCount = Object.values(browserCompat).filter(Boolean).length;
 
-    const supported = [];
-
-    for (const [browser, version] of Object.entries(browserCompat)) {
-        if (version) {
-            supported.push(`${browser.charAt(0).toUpperCase() + browser.slice(1)} ${version}+`);
-        }
-    }
-
-    if (supported.length === 0) {
-        return "Limited browser support";
-    } else if (supported.length >= 3) {
-        return "Good browser support";
-    } else {
-        return "Partial browser support";
-    }
+    if (supportedCount === 0) return "Limited browser support";
+    if (supportedCount >= 3) return "Good browser support";
+    return "Partial browser support";
 }
 
 /**
- * Creates a detailed lookup map for CSS properties, values, and at-rules.
- * This is crucial for matching the syntax found in the CSS AST to the baseline data.
- * @param {Object} config - Configuration object for filtering features
+ * Creates a detailed lookup map for CSS features.
+ * This map is crucial for matching syntax from the CSS AST to the baseline data.
+ * @param {Object} config - Configuration object for filtering features.
+ * @returns {Map<string, Object>} A map where keys are CSS identifiers (properties, functions, etc.)
+ * and values are their corresponding feature data.
  */
 function createFeatureLookupMap(config) {
     const lookupMap = new Map();
-    const specificLookupMap = new Map(); // For more specific lookups
+
+    const getStatusLabel = (baselineStatus) => {
+        if (baselineStatus === false) return 'Not Baseline';
+        if (baselineStatus === 'low') return 'Low Baseline';
+        if (baselineStatus === true || baselineStatus === 'high') return 'High Baseline';
+        return null;
+    };
+
+    const shouldInclude = (status, featureData) => {
+        if (!status) return false;
+        if (status === 'Not Baseline' && !config.includeNotBaseline) return false;
+        if (status === 'Low Baseline' && !config.includeAvailability.includes('low')) return false;
+        if (status === 'High Baseline' && !config.includeAvailability.includes('high')) return false;
+
+        if (config.baselineYearThreshold && featureData.status?.baseline_high_date) {
+            const featureYear = new Date(featureData.status.baseline_high_date).getFullYear();
+            if (featureYear < config.baselineYearThreshold) return false;
+        }
+        return true;
+    };
 
     for (const [featureId, data] of Object.entries(features)) {
-        if (!data.compat_features) continue;
+        const statusLabel = getStatusLabel(data.status?.baseline);
+        if (!shouldInclude(statusLabel, data) || !data.compat_features) continue;
 
-        const baselineStatus = data.status?.baseline;
-        // Include all baseline statuses for more comprehensive mapping
-        let statusLabel;
-        if (baselineStatus === false) {
-            statusLabel = 'Not Baseline';
-        } else if (baselineStatus === 'low') {
-            statusLabel = 'Low Baseline';
-        } else if (baselineStatus === true || baselineStatus === 'high') {
-            statusLabel = 'High Baseline';
-        } else {
-            continue; // Skip if no clear baseline status
-        }
-
-        // Check if this feature should be included based on configuration
-        if (!shouldIncludeFeature(data, statusLabel, config)) {
-            continue;
-        }
+        const featureInfo = {
+            featureId,
+            status: statusLabel,
+            description: data.description,
+            baselineYear: getBaselineYear(data.status),
+            browserCompat: getBrowserCompatInfo(data),
+            browserCompatSummary: getBrowserCompatSummary(getBrowserCompatInfo(data)),
+        };
 
         for (const compatKey of data.compat_features) {
-            // Store the full key for precision
-            const dataBrowserCompat = getBrowserCompatInfo(data || {});
-            specificLookupMap.set(compatKey.toLowerCase(), {
-                featureId,
-                status: statusLabel,
-                description: data.description,
-                baselineYear: getBaselineYear(data.status),
-                browserCompat: dataBrowserCompat,
-                browserCompatSummary: getBrowserCompatSummary(dataBrowserCompat),
-                compatKey
-            });
+            const keyParts = compatKey.split('.');
+            if (keyParts.length > 2 && ['properties', 'at-rules', 'selectors', 'types', 'functions'].includes(keyParts[1])) {
+                const key = keyParts.slice(2).join('.').toLowerCase();
 
-            let key = null;
-
-            // More precise mapping based on the type of feature
-            if (compatKey.startsWith('css.properties.') || compatKey.startsWith('css.at-rules.') || compatKey.startsWith('css.selectors.') || compatKey.startsWith('css.types.')) {
-                // Extract property name (e.g., 'css.properties.margin-block' -> 'margin-block')
-                key = compatKey.split('.')[2];
-            }
-
-            if (key) {
-                const normalizedKey = key.toLowerCase();
-
-                // Skip mapping for basic properties that are universally supported
-                const basicProperties = [
-                    'top', 'right', 'bottom', 'left', 'margin', 'padding', 'width', 'height',
-                    'color', 'background', 'border', 'font-family', 'display', 'position',
-                    'float', 'text-align', 'overflow', 'cursor', 'content', 'align-items',
-                    'justify-content', 'flex-direction', 'align-content', 'transition',
-                    'animation', 'outline', 'resize', 'min-width', 'max-width',
-                    'min-height', 'max-height', 'align-self', 'clip-path'
-                ];
-
-                // Only map if it's not a basic property or if it's specifically a problematic feature
-                const isSpecificFeature = featureId.includes('anchor') || featureId.includes('ui') ||
-                    featureId.includes('container') || featureId.includes('popover') ||
-                    featureId.includes('layer') || featureId.includes('view-timeline');
-
-                if (!basicProperties.includes(normalizedKey) || isSpecificFeature) {
-                    // Only override if we don't have a mapping or this is more specific
-                    if (!lookupMap.has(normalizedKey) || statusLabel === 'Not Baseline' || statusLabel === 'Low Baseline') {
-                        const keyBrowserCompat = getBrowserCompatInfo(data || {});
-                        lookupMap.set(normalizedKey, {
-                            featureId,
-                            status: statusLabel,
-                            description: data.description,
-                            baselineYear: getBaselineYear(data.status),
-                            browserCompat: keyBrowserCompat,
-                            browserCompatSummary: getBrowserCompatSummary(keyBrowserCompat),
-                            compatKey
-                        });
-                    }
+                // Prioritize flagging less stable features if a key is duplicated
+                const existing = lookupMap.get(key);
+                if (!existing || existing.status === 'High Baseline' || (existing.status === 'Low Baseline' && statusLabel === 'Not Baseline')) {
+                    lookupMap.set(key, { ...featureInfo, compatKey });
                 }
             }
         }
     }
 
-    // Add specific mappings for common issues
-    const specificMappings = {
-        'backdrop': 'backdrop', // ::backdrop selector
-        'clamp': 'min-max-clamp', // clamp() function
-        'oklch': 'oklab', // oklch() color function
-        'oklab': 'oklab', // oklab() color function
-        'container': 'container-queries', // @container rule for size queries
-        'anchor': 'anchor-positioning', // anchor() function
-        'popover': 'popover', // popover attribute/functionality
-        'layer': 'cascade-layers' // @layer at-rule
-    };
-
-    for (const [key, featureId] of Object.entries(specificMappings)) {
-        if (features[featureId]) {
-            const data = features[featureId];
-            const baselineStatus = data.status?.baseline;
-            let statusLabel;
-            if (baselineStatus === false) {
-                statusLabel = 'Not Baseline';
-            } else if (baselineStatus === 'low') {
-                statusLabel = 'Low Baseline';
-            } else if (baselineStatus === true || baselineStatus === 'high') {
-                statusLabel = 'High Baseline';
-            }
-
-            if (statusLabel) {
-                const manualBrowserCompat = getBrowserCompatInfo(data || {});
-                lookupMap.set(key.toLowerCase(), {
-                    featureId,
-                    status: statusLabel,
-                    description: data.description,
-                    baselineYear: getBaselineYear(data.status),
-                    browserCompat: manualBrowserCompat,
-                    browserCompatSummary: getBrowserCompatSummary(manualBrowserCompat),
-                    compatKey: `manual-${key}`
-                });
-            }
-        }
-    }
-
-    return { lookupMap, specificLookupMap };
+    return lookupMap;
 }
 
 /**
- * Checks if a feature should be included based on baseline configuration
- * @param {Object} featureData - The feature data from web-features
- * @param {string} status - The baseline status ('Not Baseline', 'Low Baseline', 'High Baseline')
- * @param {Object} config - Configuration object
- * @returns {boolean} - Whether to include this feature
- */
-function shouldIncludeFeature(featureData, status, config) {
-
-    // Check availability level
-    if (status === 'Not Baseline' && !config.includeNotBaseline) {
-        return false;
-    }
-
-    if (status === 'Low Baseline' && !config.includeAvailability.includes('low')) {
-        return false;
-    }
-
-    if (status === 'High Baseline' && !config.includeAvailability.includes('high')) {
-        return false;
-    }
-
-    // Check baseline year if threshold is set
-    if (config.baselineYearThreshold && featureData.status?.baseline_high_date) {
-        const baselineDate = new Date(featureData.status.baseline_high_date);
-        const thresholdDate = new Date(config.baselineYearThreshold, 0, 1);
-
-        // Only include if the feature became baseline after the threshold
-        if (baselineDate < thresholdDate) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/**
- * Simple helper to check if a status should be included based on config
- * @param {string} status - The baseline status
- * @param {Object} config - Configuration object
- * @returns {boolean} - Whether to include this status
+ * Checks if a status should be included based on the configuration.
+ * @param {string} status - The baseline status ('Not Baseline', 'Low Baseline', 'High Baseline').
+ * @param {Object} config - Configuration object.
+ * @returns {boolean} True if the status should be included in the report.
  */
 function shouldIncludeStatus(status, config) {
-    if (status === 'Not Baseline' && !config.includeNotBaseline) {
-        return false;
-    }
-    if (status === 'Low Baseline' && !config.includeAvailability.includes('low')) {
-        return false;
-    }
-    if (status === 'High Baseline' && !config.includeAvailability.includes('high')) {
-        return false;
-    }
+    if (status === 'Not Baseline' && !config.includeNotBaseline) return false;
+    if (status === 'Low Baseline' && !config.includeAvailability.includes('low')) return false;
+    if (status === 'High Baseline' && !config.includeAvailability.includes('high')) return false;
     return true;
 }
 
-
-
 /**
- * Parses the CSS AST and identifies rules and declarations using non-baseline features.
- * 
+ * Parses the CSS AST to identify usage of features based on the provided configuration.
  * @param {csstree.CssNode} ast - The root AST node from css-tree.
- * @param {Object} config - Configuration object for filtering features
- * @param {Array<string>} config.includeAvailability - Availability levels to include ('low', 'high', 'false')
- * @param {number|null} config.baselineYearThreshold - Year threshold for baseline features
- * @param {boolean} config.includeNotBaseline - Whether to include not-baseline features
- * @returns {Array<{selector: string, issues: Array<{property: string, status: string, featureId: string}>}>} 
- *          A list of CSS rules and the non-baseline issues they contain.
+ * @param {Object} config - Configuration object for filtering features.
+ * @returns {Array<Object>} A list of CSS rules and the flagged features they contain.
  */
 function processCssAst(ast, config = {
     includeAvailability: ['low', 'false'],
     baselineYearThreshold: null,
     includeNotBaseline: true,
-    strictness: 'normal' // 'strict', 'normal', 'relaxed'
+    strictness: 'normal'
 }) {
-    const { lookupMap: featureLookupMap, specificLookupMap } = createFeatureLookupMap(config);
+    const featureLookupMap = createFeatureLookupMap(config);
     const reportMap = new Map();
 
-    walk(ast, function (node) {
-        // --- 1. Capture the Selector for the current Rule or At-Rule ---
-        let selector = null;
-        let declarations = null;
+    const addIssue = (selector, issue) => {
+        if (!shouldIncludeStatus(issue.status, config)) return;
+        if (!reportMap.has(selector)) {
+            reportMap.set(selector, []);
+        }
+        const issues = reportMap.get(selector);
+        // Avoid adding duplicate issues for the same selector
+        if (!issues.some(i => i.featureId === issue.featureId && i.property === issue.property)) {
+            issues.push(issue);
+        }
+    };
 
-        if (node.type === 'Rule') {
-            selector = node.prelude ? generate(node.prelude) : 'unknown';
-            declarations = node.block?.children;
+    walk(ast, {
+        enter: function (node) {
+            // --- 1. Process Rules: Check Selectors and Declarations ---
+            if (node.type === 'Rule') {
+                const selector = generate(node.prelude);
 
-            // Check the Selector itself for non-baseline pseudos like :has(), :is(), ::backdrop
-            const selectorNode = node.prelude;
-            walk(selectorNode, function (selectorChild) {
-                if (selectorChild.type === 'PseudoClassSelector' || selectorChild.type === 'PseudoElementSelector') {
-                    const name = selectorChild.name.toLowerCase();
-                    let featureInfo = featureLookupMap.get(name);
-
-                    // Special handling for specific pseudo selectors
-                    if (name === 'backdrop') {
-                        const backdropFeature = features['backdrop'];
-                        const backdropBrowserCompat = getBrowserCompatInfo(backdropFeature || {});
-                        featureInfo = {
-                            featureId: 'backdrop',
-                            status: 'High Baseline',
-                            description: backdropFeature?.description || 'The ::backdrop pseudo-element',
-                            baselineYear: getBaselineYear(backdropFeature?.status),
-                            browserCompat: backdropBrowserCompat,
-                            browserCompatSummary: getBrowserCompatSummary(backdropBrowserCompat)
-                        };
-                    } else if (name === 'has') {
-                        const hasFeature = features['has'];
-                        const hasBrowserCompat = getBrowserCompatInfo(hasFeature || {});
-                        featureInfo = {
-                            featureId: 'has',
-                            status: 'Low Baseline',
-                            description: hasFeature?.description || 'The :has() pseudo-class',
-                            baselineYear: getBaselineYear(hasFeature?.status),
-                            browserCompat: hasBrowserCompat,
-                            browserCompatSummary: getBrowserCompatSummary(hasBrowserCompat)
-                        };
-                    } else if (name === 'is' || name === 'where') {
-                        const isWhereFeature = features['is-where-selectors'];
-                        const isWhereBrowserCompat = getBrowserCompatInfo(isWhereFeature || {});
-                        featureInfo = {
-                            featureId: 'is-where-selectors',
-                            status: 'High Baseline',
-                            description: isWhereFeature?.description || 'The :is() and :where() pseudo-classes',
-                            baselineYear: getBaselineYear(isWhereFeature?.status),
-                            browserCompat: isWhereBrowserCompat,
-                            browserCompatSummary: getBrowserCompatSummary(isWhereBrowserCompat)
-                        };
-                    }
-
-                    // Check if feature should be included based on configuration
-                    if (featureInfo && shouldIncludeStatus(featureInfo.status, config)) {
-                        const selectorText = selectorNode ? generate(selectorNode) : 'unknown';
-                        if (!reportMap.has(selectorText)) {
-                            reportMap.set(selectorText, []);
-                        }
-                        // Avoid duplicates if the pseudo is used multiple times in the same selector
-                        if (!reportMap.get(selectorText).some(i => i.property === name)) {
-                            reportMap.get(selectorText).push({
-                                property: name,
-                                status: featureInfo.status,
-                                featureId: featureInfo.featureId,
-                                baselineYear: featureInfo.baselineYear,
-                                description: featureInfo.description,
-                                browserCompat: featureInfo.browserCompat,
-                                browserCompatSummary: featureInfo.browserCompatSummary
-                            });
+                // Check selectors for pseudo-classes/elements
+                walk(node.prelude, (child) => {
+                    if (child.type === 'PseudoClassSelector' || child.type === 'PseudoElementSelector') {
+                        const name = child.name.toLowerCase();
+                        const featureInfo = featureLookupMap.get(name);
+                        if (featureInfo) {
+                            addIssue(selector, { ...featureInfo, property: `:${child.name}` });
                         }
                     }
-                }
-            });
+                });
 
-        } else if (node.type === 'Atrule') {
-            const atRuleName = node.name.toLowerCase();
-            let featureInfo = featureLookupMap.get(atRuleName);
-
-            // Special handling for @container queries to distinguish size vs style queries
-            if (atRuleName === 'container') {
-                const preludeText = node.prelude ? generate(node.prelude).toLowerCase() : '';
-                if (preludeText.includes('style(') || preludeText.includes('--')) {
-                    // Style query - targets custom properties
-                    const styleQueryFeature = features['container-style-queries'];
-                    const styleQueryBrowserCompat = getBrowserCompatInfo(styleQueryFeature || {});
-                    featureInfo = featureLookupMap.get('container-style-queries') || {
-                        featureId: 'container-style-queries',
-                        status: 'Not Baseline',
-                        description: styleQueryFeature?.description || 'Container style queries',
-                        baselineYear: getBaselineYear(styleQueryFeature?.status),
-                        browserCompat: styleQueryBrowserCompat,
-                        browserCompatSummary: getBrowserCompatSummary(styleQueryBrowserCompat)
-                    };
-                } else {
-                    // Size query (default)
-                    const containerFeature = features['container-queries'];
-                    const containerBrowserCompat = getBrowserCompatInfo(containerFeature || {});
-                    featureInfo = {
-                        featureId: 'container-queries',
-                        status: 'Low Baseline',
-                        description: containerFeature?.description || 'Container size queries',
-                        baselineYear: getBaselineYear(containerFeature?.status),
-                        browserCompat: containerBrowserCompat,
-                        browserCompatSummary: getBrowserCompatSummary(containerBrowserCompat)
-                    };
-                }
-            }
-
-            // Check At-Rules themselves (e.g., @layer, @font-palette-values)
-            if (featureInfo) {
-                const atRuleSelector = `@${atRuleName} ${node.prelude ? generate(node.prelude).trim() : ''}`.trim();
-                if (!reportMap.has(atRuleSelector)) {
-                    reportMap.set(atRuleSelector, []);
-                }
-                reportMap.get(atRuleSelector).push({
-                    property: `@${atRuleName}`,
-                    status: featureInfo.status,
-                    featureId: featureInfo.featureId,
-                    baselineYear: featureInfo.baselineYear,
-                    description: featureInfo.description,
-                    browserCompat: featureInfo.browserCompat,
-                    browserCompatSummary: featureInfo.browserCompatSummary
+                // Check declarations within the rule
+                node.block.children.forEach(declaration => {
+                    if (declaration.type !== 'Declaration') return;
+                    processDeclaration(declaration, selector);
                 });
             }
+            // --- 2. Process At-Rules: Check the rule itself and its declarations ---
+            else if (node.type === 'Atrule') {
+                const atRuleName = node.name.toLowerCase();
+                const preludeText = node.prelude ? generate(node.prelude).toLowerCase() : '';
+                const selector = `@${atRuleName} ${preludeText}`.trim();
 
-            // If the at-rule has a block, continue to process its declarations
-            if (node.block) {
-                declarations = node.block.children;
-                // For declarations inside an At-Rule's block, the selector is the At-Rule itself
-                selector = `@${atRuleName} ${node.prelude ? generate(node.prelude).trim() : ''}`.trim();
-            }
+                let lookupKey = atRuleName;
+                // Special handling for @container to distinguish size vs. style queries
+                if (atRuleName === 'container' && (preludeText.includes('style(') || preludeText.includes('--'))) {
+                    lookupKey = 'container-style-queries';
+                }
 
-        }
+                const featureInfo = featureLookupMap.get(lookupKey);
+                if (featureInfo) {
+                    addIssue(selector, { ...featureInfo, property: `@${atRuleName}` });
+                }
 
-        // --- 2. Check all Declarations (properties and values) ---
-        if (declarations && declarations.forEach) {
-            declarations.forEach(declaration => {
-                if (declaration.type === 'Declaration') {
-                    const property = declaration.property.toLowerCase();
-                    const valueNode = declaration.value;
-                    const currentSelector = selector;
-
-                    // Check if property itself is a non-baseline feature
-                    let propertyFeatureInfo = featureLookupMap.get(property);
-
-                    // Define well-supported properties that should never be flagged
-                    const wellSupportedProperties = [
-                        'display', 'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-                        'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-                        'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
-                        'color', 'background', 'background-color', 'background-image',
-                        'border', 'border-color', 'border-width', 'border-style',
-                        'position', 'top', 'right', 'bottom', 'left',
-                        'float', 'text-align', 'font-family', 'font-size', 'font-weight',
-                        'flex-direction', 'align-items', 'justify-content', 'align-content',
-                        'cursor', 'overflow', 'z-index', 'opacity', 'visibility',
-                        'transition', 'animation', 'transform', 'box-shadow',
-                        'outline', 'resize', 'content'
-                    ];
-
-                    // Skip if this is a well-supported property
-                    if (wellSupportedProperties.includes(property)) {
-                        propertyFeatureInfo = null;
-                    }
-
-                    // Special handling for specific properties
-                    if (property === 'margin-block' || property === 'margin-inline' ||
-                        property === 'padding-block' || property === 'padding-inline' ||
-                        property.includes('-block') || property.includes('-inline')) {
-                        // Logical properties - check if they're actually high baseline
-                        const logicalPropsFeature = features['logical-properties'];
-                        const logicalPropsBrowserCompat = getBrowserCompatInfo(logicalPropsFeature || {});
-                        propertyFeatureInfo = {
-                            featureId: 'logical-properties',
-                            status: 'High Baseline',
-                            description: logicalPropsFeature?.description || 'CSS logical properties',
-                            baselineYear: getBaselineYear(logicalPropsFeature?.status),
-                            browserCompat: logicalPropsBrowserCompat,
-                            browserCompatSummary: getBrowserCompatSummary(logicalPropsBrowserCompat)
-                        };
-                    }
-
-                    const shouldCheckProperty = propertyFeatureInfo &&
-                        (propertyFeatureInfo.status === 'Not Baseline' || propertyFeatureInfo.status === 'Low Baseline');
-
-                    if (shouldCheckProperty) {
-                        if (!reportMap.has(currentSelector)) {
-                            reportMap.set(currentSelector, []);
-                        }
-                        reportMap.get(currentSelector).push({
-                            property,
-                            status: propertyFeatureInfo.status,
-                            featureId: propertyFeatureInfo.featureId,
-                            baselineYear: propertyFeatureInfo.baselineYear,
-                            description: propertyFeatureInfo.description,
-                            browserCompat: propertyFeatureInfo.browserCompat,
-                            browserCompatSummary: propertyFeatureInfo.browserCompatSummary
-                        });
-                    }
-
-                    // Context-aware property checking - only flag problematic combinations
-                    const valueText = generate(valueNode).toLowerCase();
-
-                    // Check for specific problematic property-value combinations
-                    if (property === 'font-family' && (valueText.includes('ui-serif') || valueText.includes('ui-sans-serif') || valueText.includes('ui-monospace'))) {
-                        const fontFamilyFeature = features['font-family-ui'];
-                        if (fontFamilyFeature) {
-                            const fontBrowserCompat = getBrowserCompatInfo(fontFamilyFeature);
-                            if (!reportMap.has(currentSelector)) {
-                                reportMap.set(currentSelector, []);
-                            }
-                            reportMap.get(currentSelector).push({
-                                property: `${property} (ui-* values)`,
-                                status: 'Not Baseline',
-                                featureId: 'font-family-ui',
-                                baselineYear: getBaselineYear(fontFamilyFeature.status),
-                                description: fontFamilyFeature.description,
-                                browserCompat: fontBrowserCompat,
-                                browserCompatSummary: getBrowserCompatSummary(fontBrowserCompat)
-                            });
-                        }
-                    }
-
-                    // Walk through the Declaration's VALUE to check for function/value usage
-                    walk(valueNode, function (valueChild) {
-                        if (valueChild.type === 'Function') {
-                            const functionName = valueChild.name.toLowerCase();
-                            let valueFeatureInfo = featureLookupMap.get(functionName);
-
-                            // Special mappings for common functions
-                            if (functionName === 'clamp' || functionName === 'min' || functionName === 'max') {
-                                const clampFeature = features['min-max-clamp'];
-                                const clampBrowserCompat = getBrowserCompatInfo(clampFeature || {});
-                                valueFeatureInfo = {
-                                    featureId: 'min-max-clamp',
-                                    status: 'High Baseline',
-                                    description: clampFeature?.description || 'CSS min(), max(), and clamp() functions',
-                                    baselineYear: getBaselineYear(clampFeature?.status),
-                                    browserCompat: clampBrowserCompat,
-                                    browserCompatSummary: getBrowserCompatSummary(clampBrowserCompat)
-                                };
-                            } else if (functionName === 'oklch' || functionName === 'oklab') {
-                                const oklabFeature = features['oklab'];
-                                const oklabBrowserCompat = getBrowserCompatInfo(oklabFeature || {});
-                                valueFeatureInfo = {
-                                    featureId: 'oklab',
-                                    status: 'Low Baseline',
-                                    description: oklabFeature?.description || 'OKLAB and OKLCH color functions',
-                                    baselineYear: getBaselineYear(oklabFeature?.status),
-                                    browserCompat: oklabBrowserCompat,
-                                    browserCompatSummary: getBrowserCompatSummary(oklabBrowserCompat)
-                                };
-                            } else if (functionName === 'anchor') {
-                                const anchorFeature = features['anchor-positioning'];
-                                const anchorBrowserCompat = getBrowserCompatInfo(anchorFeature || {});
-                                valueFeatureInfo = {
-                                    featureId: 'anchor-positioning',
-                                    status: 'Not Baseline',
-                                    description: anchorFeature?.description || 'CSS anchor positioning',
-                                    baselineYear: getBaselineYear(anchorFeature?.status),
-                                    browserCompat: anchorBrowserCompat,
-                                    browserCompatSummary: getBrowserCompatSummary(anchorBrowserCompat)
-                                };
-                            }
-
-                            if (valueFeatureInfo && shouldIncludeStatus(valueFeatureInfo.status, config)) {
-                                if (!reportMap.has(currentSelector)) {
-                                    reportMap.set(currentSelector, []);
-                                }
-
-                                const propAndValue = `${property}: ${functionName}()`;
-
-                                // Avoid duplicates
-                                if (!reportMap.get(currentSelector).some(i => i.property === propAndValue)) {
-                                    reportMap.get(currentSelector).push({
-                                        property: propAndValue,
-                                        status: valueFeatureInfo.status,
-                                        featureId: valueFeatureInfo.featureId,
-                                        baselineYear: valueFeatureInfo.baselineYear,
-                                        description: valueFeatureInfo.description,
-                                        browserCompat: valueFeatureInfo.browserCompat,
-                                        browserCompatSummary: valueFeatureInfo.browserCompatSummary
-                                    });
-                                }
-                            }
-                        } else if (valueChild.type === 'Identifier') {
-                            const identifierName = valueChild.name.toLowerCase();
-
-                            // Expanded list of common high-baseline values to skip
-                            const commonValues = [
-                                'block', 'inline', 'flex', 'grid', 'none', 'auto', 'inherit', 'initial',
-                                'center', 'left', 'right', 'top', 'bottom', 'middle', 'baseline',
-                                'start', 'end', 'stretch', 'space-between', 'space-around', 'space-evenly',
-                                'row', 'column', 'wrap', 'nowrap', 'reverse', 'hidden', 'visible',
-                                'scroll', 'fixed', 'absolute', 'relative', 'static', 'sticky',
-                                'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset',
-                                'transparent', 'currentcolor', 'white', 'black', 'red', 'green', 'blue',
-                                'bold', 'normal', 'italic', 'underline', 'overline', 'line-through',
-                                'pointer', 'default', 'text', 'crosshair', 'move', 'help', 'wait',
-                                'serif', 'sans-serif', 'monospace', 'cursive', 'fantasy',
-                                'small', 'medium', 'large', 'x-small', 'x-large', 'xx-small', 'xx-large',
-                                'border-box', 'content-box', 'padding-box', 'fill', 'contain', 'cover'
-                            ];
-
-                            if (commonValues.includes(identifierName)) return;
-
-                            const identifierFeatureInfo = featureLookupMap.get(identifierName);
-
-                            if (identifierFeatureInfo && shouldIncludeStatus(identifierFeatureInfo.status, config)) {
-                                if (!reportMap.has(currentSelector)) {
-                                    reportMap.set(currentSelector, []);
-                                }
-                                if (!reportMap.get(currentSelector).some(i => i.property.includes(identifierName))) {
-                                    reportMap.get(currentSelector).push({
-                                        property: `${property}: ${identifierName}`,
-                                        status: identifierFeatureInfo.status,
-                                        featureId: identifierFeatureInfo.featureId,
-                                        baselineYear: identifierFeatureInfo.baselineYear,
-                                        description: identifierFeatureInfo.description,
-                                        browserCompat: identifierFeatureInfo.browserCompat,
-                                        browserCompatSummary: identifierFeatureInfo.browserCompatSummary
-                                    });
-                                }
-                            }
-                        } else if (valueChild.type === 'Dimension') {
-                            // Handle dimension units - but don't flag standard units like px, rem, em as functions
-                            const unit = valueChild.unit?.toLowerCase();
-                            if (unit && ['rem', 'em', 'px', '%', 'vh', 'vw'].includes(unit)) {
-                                // Skip standard CSS units
-                                return;
-                            }
-                        }
+                // Check declarations within the at-rule's block, if it exists
+                if (node.block) {
+                    node.block.children.forEach(declaration => {
+                        if (declaration.type !== 'Declaration') return;
+                        processDeclaration(declaration, selector);
                     });
                 }
-            });
+            }
         }
     });
 
-    // Format the final report as an array and filter based on configuration
-    return Array.from(reportMap.entries()).map(([selector, issues]) => ({
-        selector,
-        issues: Array.from(new Set(issues.map(i => JSON.stringify(i))))
-            .map(s => JSON.parse(s))
-            .filter(issue => {
-                // Apply configuration-based filtering
-                if (issue.status === 'Not Baseline' && !config.includeNotBaseline) {
-                    return false;
-                }
-                if (issue.status === 'Low Baseline' && !config.includeAvailability.includes('low')) {
-                    return false;
-                }
-                if (issue.status === 'High Baseline' && !config.includeAvailability.includes('high')) {
-                    return false;
-                }
-                return true;
-            })
-    })).filter(entry => entry.issues.length > 0); // Remove entries with no issues
-}
+    /** Helper to process a single declaration (property and its value) */
+    function processDeclaration(declaration, selector) {
+        const property = declaration.property.toLowerCase();
+        const valueNode = declaration.value;
 
+        // Check the property itself
+        const propFeatureInfo = featureLookupMap.get(property);
+        if (propFeatureInfo) {
+            addIssue(selector, { ...propFeatureInfo, property });
+        }
+
+        // Walk through the value to find functions or identifiers (keywords)
+        walk(valueNode, (child) => {
+            let valueFeatureInfo = null;
+            let identifier = null;
+
+            if (child.type === 'Function') {
+                identifier = child.name.toLowerCase();
+                valueFeatureInfo = featureLookupMap.get(identifier);
+                identifier += '()';
+            } else if (child.type === 'Identifier') {
+                identifier = child.name.toLowerCase();
+                valueFeatureInfo = featureLookupMap.get(identifier);
+            }
+
+            if (valueFeatureInfo) {
+                addIssue(selector, { ...valueFeatureInfo, property: `${property}: ${identifier}` });
+            }
+        });
+    }
+
+    // Format the final report
+    return Array.from(reportMap.entries())
+        .map(([selector, issues]) => ({ selector, issues }))
+        .filter(entry => entry.issues.length > 0);
+}
 
 async function getCssCode(browserObject, framework = 'puppeteer') {
     try {
@@ -1101,8 +692,6 @@ async function highlightElements(browserObject, report, framework = 'puppeteer')
                 card.style.top = `${Math.max(8, top)}px`;
             }
 
-
-
             // Enhanced card hide/show management
             let hideTimeout = null;
 
@@ -1145,96 +734,367 @@ async function highlightElements(browserObject, report, framework = 'puppeteer')
 
             // Inject styles to highlight elements matching the selector and add hover functionality
             try {
-                await browserObject[evaluateFunction]((sel, issues) => {
-                    const elements = document.querySelectorAll(sel);
+                // For Playwright, wrap multiple arguments in an object
+                if (framework === 'playwright') {
+                    await browserObject.evaluate(({ selector, issues }) => {
+                        const elements = document.querySelectorAll(selector);
 
-                    elements.forEach(el => {
-                        el.style.outline = '3px solid red';
-                        el.style.cursor = 'help';
+                        elements.forEach(el => {
+                            // Determine highlight color based on most severe baseline status
+                            const statuses = issues.map(issue => issue.status);
+                            let highlightColor = '#44aa44'; // High Baseline - green
+                            let severity = 'high';
+                            
+                            if (statuses.includes('Not Baseline')) {
+                                highlightColor = '#ff4444'; // Not Baseline - red
+                                severity = 'not';
+                            } else if (statuses.includes('Low Baseline')) {
+                                highlightColor = '#ff8800'; // Low Baseline - orange
+                                severity = 'low';
+                            }
 
-                        // Store detailed issue data
-                        el.setAttribute('data-baseline-issues', JSON.stringify(issues));
+                            el.style.outline = `3px solid ${highlightColor}`;
+                            el.style.cursor = 'help';
+                            
+                            // Ensure element positioning allows for badge placement
+                            const computedPosition = window.getComputedStyle(el).position;
+                            if (computedPosition === 'static') {
+                                el.style.position = 'relative';
+                            }
+                            
+                            // Remove any existing badge to avoid duplicates
+                            const existingBadge = el.querySelector('.baseline-issue-badge');
+                            if (existingBadge) {
+                                existingBadge.remove();
+                            }
+                            
+                            // Add issue count badge
+                            const badge = document.createElement('div');
+                            badge.className = 'baseline-issue-badge';
+                            badge.textContent = issues.length;
+                            badge.style.cssText = `
+                                position: absolute;
+                                top: -10px;
+                                right: -10px;
+                                background: ${highlightColor};
+                                color: white;
+                                border-radius: 50%;
+                                width: 22px;
+                                height: 22px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 11px;
+                                font-weight: bold;
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+                                z-index: 9999;
+                                border: 2px solid white;
+                                animation: pulse-${severity} 2s infinite;
+                                pointer-events: none;
+                                user-select: none;
+                            `;
+                            
+                            // Add animations for different severities
+                            if (!document.getElementById('baseline-badge-animations')) {
+                                const animationStyle = document.createElement('style');
+                                animationStyle.id = 'baseline-badge-animations';
+                                animationStyle.textContent = `
+                                    @keyframes pulse-not {
+                                        0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(255, 68, 68, 0.4); }
+                                        50% { transform: scale(1.15); box-shadow: 0 4px 16px rgba(255, 68, 68, 0.7); }
+                                    }
+                                    @keyframes pulse-low {
+                                        0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(255, 136, 0, 0.4); }
+                                        50% { transform: scale(1.1); box-shadow: 0 4px 12px rgba(255, 136, 0, 0.6); }
+                                    }
+                                    @keyframes pulse-high {
+                                        0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(68, 170, 68, 0.4); }
+                                        50% { transform: scale(1.05); box-shadow: 0 3px 10px rgba(68, 170, 68, 0.5); }
+                                    }
+                                `;
+                                document.head.appendChild(animationStyle);
+                            }
+                            
+                            el.appendChild(badge);
 
-                        // Add hover event listeners with improved timing
-                        el.addEventListener('mouseenter', function (e) {
-                            const hoverCard = window.baselineHoverCard;
-                            const issuesData = JSON.parse(this.getAttribute('data-baseline-issues'));
+                            // Store detailed issue data
+                            el.setAttribute('data-baseline-issues', JSON.stringify(issues));
 
-                            // Store current hovered element for the toggle function
-                            window.currentHoveredElement = this;
+                            // Add hover event listeners with improved timing
+                            el.addEventListener('mouseenter', function (e) {
+                                const hoverCard = window.baselineHoverCard;
+                                const issuesData = JSON.parse(this.getAttribute('data-baseline-issues'));
 
-                            // Generate hover card content with enhanced contrast
-                            let cardContent = `<h4><img src="https://web-platform-dx.github.io/web-features/assets/img/baseline-widely-icon.svg" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; filter: brightness(0) invert(1);" alt="Baseline"> Baseline Issues (${issuesData.length})</h4>`;
+                                // Store current hovered element for the toggle function
+                                window.currentHoveredElement = this;
 
-                            issuesData.forEach((issue, index) => {
-                                const statusClass = issue.status.toLowerCase().replace(' ', '-');
-                                const statusColor = issue.status === 'Not Baseline' ? '#ff4444' :
-                                    issue.status === 'Low Baseline' ? '#ff8800' : '#44aa44';
+                                // Determine the most severe status for the icon
+                                const statuses = issuesData.map(issue => issue.status);
+                                let iconUrl = 'https://web-platform-dx.github.io/web-features/assets/img/baseline-widely-icon.svg';
+                                let statusText = 'High Baseline';
+                                
+                                if (statuses.includes('Not Baseline')) {
+                                    iconUrl = 'https://web-platform-dx.github.io/web-features/assets/img/baseline-newly-icon.svg';
+                                    statusText = 'Not Baseline';
+                                } else if (statuses.includes('Low Baseline')) {
+                                    iconUrl = 'https://web-platform-dx.github.io/web-features/assets/img/baseline-limited-icon.svg';
+                                    statusText = 'Low Baseline';
+                                }
 
-                                // Show full description without truncation
-                                const description = issue.description || '';
+                                // Generate hover card content with enhanced contrast
+                                let cardContent = `<h4><img src="${iconUrl}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; filter: brightness(0) invert(1);" alt="Baseline"> ${statusText} Issues (${issuesData.length})</h4>`;
 
-                                // Generate browser compatibility HTML
-                                let browserCompatHtml = '';
-                                if (issue.browserCompat) {
-                                    const browserItems = [];
-                                    for (const [browser, version] of Object.entries(issue.browserCompat)) {
-                                        if (version) {
-                                            browserItems.push(`<div class="browser-item ${browser}">${browser.charAt(0).toUpperCase() + browser.slice(1)} ${version}+</div>`);
+                                issuesData.forEach((issue, index) => {
+                                    const statusClass = issue.status.toLowerCase().replace(' ', '-');
+                                    const statusColor = issue.status === 'Not Baseline' ? '#ff4444' :
+                                        issue.status === 'Low Baseline' ? '#ff8800' : '#44aa44';
+
+                                    // Show full description without truncation
+                                    const description = issue.description || '';
+
+                                    // Generate browser compatibility HTML
+                                    let browserCompatHtml = '';
+                                    if (issue.browserCompat) {
+                                        const browserItems = [];
+                                        for (const [browser, version] of Object.entries(issue.browserCompat)) {
+                                            if (version) {
+                                                browserItems.push(`<div class="browser-item ${browser}">${browser.charAt(0).toUpperCase() + browser.slice(1)} ${version}+</div>`);
+                                            }
+                                        }
+
+                                        if (browserItems.length > 0) {
+                                            browserCompatHtml = `
+                                            <div class="browser-compat">
+                                                <h5>🌐 Browser Support</h5>
+                                                ${issue.browserCompatSummary ? `<div class="browser-compat-summary">${issue.browserCompatSummary}</div>` : ''}
+                                                <div class="browser-list">
+                                                    ${browserItems.join('')}
+                                                </div>
+                                            </div>
+                                        `;
                                         }
                                     }
 
-                                    if (browserItems.length > 0) {
-                                        browserCompatHtml = `
-                                        <div class="browser-compat">
-                                            <h5>🌐 Browser Support</h5>
-                                            ${issue.browserCompatSummary ? `<div class="browser-compat-summary">${issue.browserCompatSummary}</div>` : ''}
-                                            <div class="browser-list">
-                                                ${browserItems.join('')}
-                                            </div>
-                                        </div>
-                                    `;
-                                    }
-                                }
+                                    // Generate better URLs for external links
+                                    const propertyName = issue.property.split(':')[0].replace(/^@/, '');
+                                    const mdnUrl = `https://developer.mozilla.org/en-US/docs/Web/CSS/${propertyName}`;
+                                    const webFeaturesUrl = `https://web-platform-dx.github.io/web-features/${issue.featureId}`;
+                                    const canIUseUrl = `https://caniuse.com/?search=${encodeURIComponent(propertyName)}`;
 
-                                // Generate better URLs for external links
-                                const propertyName = issue.property.split(':')[0].replace(/^@/, '');
-                                const mdnUrl = `https://developer.mozilla.org/en-US/docs/Web/CSS/${propertyName}`;
-                                const webFeaturesUrl = `https://web-platform-dx.github.io/web-features/${issue.featureId}`;
-                                const canIUseUrl = `https://caniuse.com/?search=${encodeURIComponent(propertyName)}`;
-
-                                cardContent += `
-                        <div class="issue-item" style="--status-color: ${statusColor}">
-                            <div class="property">${issue.property}</div>
-                            <div class="status ${statusClass}">${issue.status}</div>
-                            ${description ? `<div class="description">${description}</div>` : ''}
-                            ${issue.baselineYear ? `<div class="baseline-year">📅 Baseline since: ${issue.baselineYear}</div>` : ''}
-                            <div class="feature-id">🏷️ Feature: ${issue.featureId}</div>
-                            ${browserCompatHtml}
-                            <div class="links-section">
-                                <a href="${mdnUrl}" target="_blank" class="external-link">📚 MDN Docs</a>
-                                <a href="${webFeaturesUrl}" target="_blank" class="external-link">🌐 Web Features</a>
-                                <a href="${canIUseUrl}" target="_blank" class="external-link">📊 Can I Use</a>
+                                    cardContent += `
+                            <div class="issue-item" style="--status-color: ${statusColor}">
+                                <div class="property">${issue.property}</div>
+                                <div class="status ${statusClass}">${issue.status}</div>
+                                ${description ? `<div class="description">${description}</div>` : ''}
+                                ${issue.baselineYear ? `<div class="baseline-year">📅 Baseline since: ${issue.baselineYear}</div>` : ''}
+                                <div class="feature-id">🏷️ Feature: ${issue.featureId}</div>
+                                ${browserCompatHtml}
+                                <div class="links-section">
+                                    <a href="${mdnUrl}" target="_blank" class="external-link">📚 MDN Docs</a>
+                                    <a href="${webFeaturesUrl}" target="_blank" class="external-link">🌐 Web Features</a>
+                                    <a href="${canIUseUrl}" target="_blank" class="external-link">📊 Can I Use</a>
+                                </div>
                             </div>
-                        </div>
-                    `;
+                        `;
+                                });
+
+                                hoverCard.innerHTML = cardContent;
+                                window.positionBaselineCard(this, hoverCard);
+
+                                // Show the card with enhanced animation
+                                setTimeout(() => {
+                                    window.showBaselineCard();
+                                }, 50);
                             });
 
-                            hoverCard.innerHTML = cardContent;
-                            window.positionBaselineCard(this, hoverCard);
-
-                            // Show the card with enhanced animation
-                            setTimeout(() => {
-                                window.showBaselineCard();
-                            }, 50);
+                            el.addEventListener('mouseleave', function () {
+                                // Use the new delayed hide function
+                                window.hideBaselineCard(800); // 800ms delay before hiding
+                            });
                         });
+                    }, { selector: entry.selector, issues: entry.issues });
+                } else {
+                    // For Puppeteer and Selenium, use the original approach with multiple arguments
+                    await browserObject[evaluateFunction]((sel, issues) => {
+                        const elements = document.querySelectorAll(sel);
 
-                        el.addEventListener('mouseleave', function () {
-                            // Use the new delayed hide function
-                            window.hideBaselineCard(800); // 800ms delay before hiding
+                        elements.forEach(el => {
+                            // Determine highlight color based on most severe baseline status
+                            const statuses = issues.map(issue => issue.status);
+                            let highlightColor = '#44aa44'; // High Baseline - green
+                            let severity = 'high';
+                            
+                            if (statuses.includes('Not Baseline')) {
+                                highlightColor = '#ff4444'; // Not Baseline - red
+                                severity = 'not';
+                            } else if (statuses.includes('Low Baseline')) {
+                                highlightColor = '#ff8800'; // Low Baseline - orange
+                                severity = 'low';
+                            }
+
+                            el.style.outline = `3px solid ${highlightColor}`;
+                            el.style.cursor = 'help';
+                            
+                            // Ensure element positioning allows for badge placement
+                            const computedPosition = window.getComputedStyle(el).position;
+                            if (computedPosition === 'static') {
+                                el.style.position = 'relative';
+                            }
+                            
+                            // Remove any existing badge to avoid duplicates
+                            const existingBadge = el.querySelector('.baseline-issue-badge');
+                            if (existingBadge) {
+                                existingBadge.remove();
+                            }
+                            
+                            // Add issue count badge
+                            const badge = document.createElement('div');
+                            badge.className = 'baseline-issue-badge';
+                            badge.textContent = issues.length;
+                            badge.style.cssText = `
+                                position: absolute;
+                                top: -10px;
+                                right: -10px;
+                                background: ${highlightColor};
+                                color: white;
+                                border-radius: 50%;
+                                width: 22px;
+                                height: 22px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 11px;
+                                font-weight: bold;
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+                                z-index: 9999;
+                                border: 2px solid white;
+                                animation: pulse-${severity} 2s infinite;
+                                pointer-events: none;
+                                user-select: none;
+                            `;
+                            
+                            // Add animations for different severities
+                            if (!document.getElementById('baseline-badge-animations')) {
+                                const animationStyle = document.createElement('style');
+                                animationStyle.id = 'baseline-badge-animations';
+                                animationStyle.textContent = `
+                                    @keyframes pulse-not {
+                                        0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(255, 68, 68, 0.4); }
+                                        50% { transform: scale(1.15); box-shadow: 0 4px 16px rgba(255, 68, 68, 0.7); }
+                                    }
+                                    @keyframes pulse-low {
+                                        0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(255, 136, 0, 0.4); }
+                                        50% { transform: scale(1.1); box-shadow: 0 4px 12px rgba(255, 136, 0, 0.6); }
+                                    }
+                                    @keyframes pulse-high {
+                                        0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(68, 170, 68, 0.4); }
+                                        50% { transform: scale(1.05); box-shadow: 0 3px 10px rgba(68, 170, 68, 0.5); }
+                                    }
+                                `;
+                                document.head.appendChild(animationStyle);
+                            }
+                            
+                            el.appendChild(badge);
+
+                            // Store detailed issue data
+                            el.setAttribute('data-baseline-issues', JSON.stringify(issues));
+
+                            // Add hover event listeners with improved timing
+                            el.addEventListener('mouseenter', function (e) {
+                                const hoverCard = window.baselineHoverCard;
+                                const issuesData = JSON.parse(this.getAttribute('data-baseline-issues'));
+
+                                // Store current hovered element for the toggle function
+                                window.currentHoveredElement = this;
+
+                                // Determine the most severe status for the icon
+                                const statuses = issuesData.map(issue => issue.status);
+                                let iconUrl = 'https://web-platform-dx.github.io/web-features/assets/img/baseline-widely-icon.svg';
+                                let statusText = 'High Baseline';
+                                
+                                if (statuses.includes('Not Baseline')) {
+                                    iconUrl = 'https://web-platform-dx.github.io/web-features/assets/img/baseline-newly-icon.svg';
+                                    statusText = 'Not Baseline';
+                                } else if (statuses.includes('Low Baseline')) {
+                                    iconUrl = 'https://web-platform-dx.github.io/web-features/assets/img/baseline-limited-icon.svg';
+                                    statusText = 'Low Baseline';
+                                }
+
+                                // Generate hover card content with enhanced contrast
+                                let cardContent = `<h4><img src="${iconUrl}" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; filter: brightness(0) invert(1);" alt="Baseline"> ${statusText} Issues (${issuesData.length})</h4>`;
+
+                                issuesData.forEach((issue, index) => {
+                                    const statusClass = issue.status.toLowerCase().replace(' ', '-');
+                                    const statusColor = issue.status === 'Not Baseline' ? '#ff4444' :
+                                        issue.status === 'Low Baseline' ? '#ff8800' : '#44aa44';
+
+                                    // Show full description without truncation
+                                    const description = issue.description || '';
+
+                                    // Generate browser compatibility HTML
+                                    let browserCompatHtml = '';
+                                    if (issue.browserCompat) {
+                                        const browserItems = [];
+                                        for (const [browser, version] of Object.entries(issue.browserCompat)) {
+                                            if (version) {
+                                                browserItems.push(`<div class="browser-item ${browser}">${browser.charAt(0).toUpperCase() + browser.slice(1)} ${version}+</div>`);
+                                            }
+                                        }
+
+                                        if (browserItems.length > 0) {
+                                            browserCompatHtml = `
+                                            <div class="browser-compat">
+                                                <h5>🌐 Browser Support</h5>
+                                                ${issue.browserCompatSummary ? `<div class="browser-compat-summary">${issue.browserCompatSummary}</div>` : ''}
+                                                <div class="browser-list">
+                                                    ${browserItems.join('')}
+                                                </div>
+                                            </div>
+                                        `;
+                                        }
+                                    }
+
+                                    // Generate better URLs for external links
+                                    const propertyName = issue.property.split(':')[0].replace(/^@/, '');
+                                    const mdnUrl = `https://developer.mozilla.org/en-US/docs/Web/CSS/${propertyName}`;
+                                    const webFeaturesUrl = `https://web-platform-dx.github.io/web-features/${issue.featureId}`;
+                                    const canIUseUrl = `https://caniuse.com/?search=${encodeURIComponent(propertyName)}`;
+
+                                    cardContent += `
+                            <div class="issue-item" style="--status-color: ${statusColor}">
+                                <div class="property">${issue.property}</div>
+                                <div class="status ${statusClass}">${issue.status}</div>
+                                ${description ? `<div class="description">${description}</div>` : ''}
+                                ${issue.baselineYear ? `<div class="baseline-year">📅 Baseline since: ${issue.baselineYear}</div>` : ''}
+                                <div class="feature-id">🏷️ Feature: ${issue.featureId}</div>
+                                ${browserCompatHtml}
+                                <div class="links-section">
+                                    <a href="${mdnUrl}" target="_blank" class="external-link">📚 MDN Docs</a>
+                                    <a href="${webFeaturesUrl}" target="_blank" class="external-link">🌐 Web Features</a>
+                                    <a href="${canIUseUrl}" target="_blank" class="external-link">📊 Can I Use</a>
+                                </div>
+                            </div>
+                        `;
+                                });
+
+                                hoverCard.innerHTML = cardContent;
+                                window.positionBaselineCard(this, hoverCard);
+
+                                // Show the card with enhanced animation
+                                setTimeout(() => {
+                                    window.showBaselineCard();
+                                }, 50);
+                            });
+
+                            el.addEventListener('mouseleave', function () {
+                                // Use the new delayed hide function
+                                window.hideBaselineCard(800); // 800ms delay before hiding
+                            });
                         });
-                    });
-                }, entry.selector, entry.issues);
+                    }, entry.selector, entry.issues);
+                }
             } catch (err) {
                 console.error(`Error querying selector (${entry.selector}): ${err.message}`)
                 console.info("continuing...")
@@ -1328,6 +1188,32 @@ function printBeautifiedReport(report, config) {
                 console.log(`   🌐 Browser support: ${firstIssue.browserCompatSummary}`);
             }
 
+            // Display detailed browser compatibility information
+            if (firstIssue.browserCompat) {
+                const browserSupport = [];
+                Object.entries(firstIssue.browserCompat).forEach(([browser, version]) => {
+                    if (version) {
+                        const browserIcon = {
+                            chrome: '🟡',
+                            firefox: '🟠', 
+                            safari: '🔵',
+                            edge: '🟦'
+                        }[browser] || '🌐';
+                        browserSupport.push(`${browserIcon} ${browser.charAt(0).toUpperCase() + browser.slice(1)} ${version}+`);
+                    }
+                });
+                if (browserSupport.length > 0) {
+                    console.log(`   🌐 Browser versions: ${browserSupport.join(', ')}`);
+                }
+            }
+
+            // Display reference links
+            const propertyName = firstIssue.property.split(':')[0].replace(/^@/, '');
+            console.log(`   🔗 References:`);
+            console.log(`      📚 MDN: https://developer.mozilla.org/en-US/docs/Web/CSS/${propertyName}`);
+            console.log(`      🌐 Web Features: https://web-platform-dx.github.io/web-features/${featureId}`);
+            console.log(`      📊 Can I Use: https://caniuse.com/?search=${encodeURIComponent(propertyName)}`);
+
             console.log(`   📍 Found in ${featureIssues.length} selector(s):`);
 
             // Group by selector to avoid repetition
@@ -1394,7 +1280,7 @@ async function baselineScanPipeline(browserObject, config, framework = 'puppetee
         const report = processCssAst(ast, config)
         printBeautifiedReport(report, config)
         await highlightElements(browserObject, report, framework)
-        await sleep("1m")
+        await sleep(config.delay || "1m")
     } catch (err) {
         console.error(`Error performing baseline_scan: ${err.message}`)
     }

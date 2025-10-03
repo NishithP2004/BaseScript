@@ -100,25 +100,92 @@ class PuppeteerHandler extends FrameworkHandler {
     }
 
     handleBaseline_scan(value) {
-        return `await baselineScanPipeline(page, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed' })}, 'puppeteer');\n`
+        return `await baselineScanPipeline(page, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed', delay: value.delay })}, 'puppeteer');\n`
     }
 
     handleEOF(value) {
         return ((value.operation === "close") ? `await browser.close()\n` : `await browser.disconnect()\n`)
     }
 
+    handleScroll(value) {
+        if (value.to) {
+            if (value.to.selector) 
+                return `await page.evaluate((selector) => {
+    const el = document.querySelector(selector);
+    if (el) { 
+        el.scrollIntoView({ behavior: "smooth", block: "center" }); 
+    }
+}, "${value.to.selector}");
+`
+            else
+                return `await page.evaluate((coords) => {
+    window.scrollTo(coords.x, coords.y);
+}, ${JSON.stringify(value.to.coords)});
+`
+        } else {
+            return `await page.evaluate((by) => {
+    window.scrollBy(by.dx, by.dy);
+}, ${JSON.stringify(value.by)});
+`
+        }
+    }
+
     getAssertionCode() {
         return `
 async function checkAssertion(page, options) {
-    if(options.timeout) 
-        await page.waitForSelector(options.selector, { "timeout": parseTimeout(options.timeout) })
-    
-    const text = await page.$eval(options.selector, el => el.textContent)
-    
-    if(options.contains) {
-        return text.includes(options.contains)
-    } else {
-        return (options.exists)? !!text: !text;   
+    try {
+        // Handle timeout option
+        if(options.timeout) {
+            await page.waitForSelector(options.selector, { "timeout": parseTimeout(options.timeout) })
+        }
+        
+        // Get element and text content
+        const element = await page.$(options.selector)
+        if (!element && options.exists !== false) {
+            throw new Error(\`Element not found: \${options.selector}\`)
+        }
+        
+        const text = element ? await page.$eval(options.selector, el => el.textContent?.trim() || '') : ''
+        
+        // Perform assertions based on type
+        let result = true
+        let message = ''
+        
+        if (options.contains) {
+            result = text.includes(options.contains)
+            message = \`Expected text to contain "\${options.contains}", but got: "\${text}"\`
+        } else if (options.equals) {
+            result = text === options.equals
+            message = \`Expected text to equal "\${options.equals}", but got: "\${text}"\`
+        } else if (options.matches) {
+            const regex = new RegExp(options.matches)
+            result = regex.test(text)
+            message = \`Expected text to match pattern \${regex}, but got: "\${text}"\`
+        } else if (options.hasOwnProperty('exists')) {
+            result = options.exists ? !!element : !element
+            message = \`Expected element to \${options.exists ? 'exist' : 'not exist'}\`
+        } else if (options.visible !== undefined) {
+            const isVisible = element ? await element.isIntersectingViewport() : false
+            result = options.visible ? isVisible : !isVisible
+            message = \`Expected element to be \${options.visible ? 'visible' : 'hidden'}\`
+        }
+        
+        if (!result) {
+            console.error(\`❌ Assertion failed: \${message}\`)
+            if (options.throwOnFail !== false) {
+                throw new Error(\`Assertion failed: \${message}\`)
+            }
+        } else {
+            console.log(\`✅ Assertion passed: \${options.selector}\`)
+        }
+        
+        return result
+    } catch (error) {
+        console.error(\`❌ Assertion error: \${error.message}\`)
+        if (options.throwOnFail !== false) {
+            throw error
+        }
+        return false
     }
 }
 `
@@ -132,7 +199,7 @@ class PlaywrightHandler extends FrameworkHandler {
     }
 
     handleFramework() {
-        return `${this.getAdditionalCode()}\nimport { chromium, firefox, webkit } from 'playwright'\nlet page, browser, context;\n${this.getAssertionCode()}\n`
+        return `${this.getAdditionalCode()}\nimport { chromium } from 'playwright'\nlet page, browser, context;\n${this.getAssertionCode()}\n`
     }
 
     handleBrowser(value) {
@@ -140,7 +207,7 @@ class PlaywrightHandler extends FrameworkHandler {
             case "launch":
                 return `browser = await chromium.launch(${JSON.stringify(value.launch, null, 2)})\ncontext = await browser.newContext()\npage = await context.newPage();\n`
             case "connect":
-                return `browser = await chromium.connect({ "wsEndpoint": "${value.connect.wsUrl}" })\ncontext = await browser.newContext()\npage = await context.newPage();\n`
+                return `browser = await chromium.connectOverCDP("${value.connect.wsUrl}")\npage = await browser.newPage();\n`
         }
     }
 
@@ -172,6 +239,29 @@ class PlaywrightHandler extends FrameworkHandler {
             return `await page.mouse.click(${value.coords.x}, ${value.coords.y})\n`
     }
 
+    handleScan(value) {
+        if(value.to) {
+            if(value.to.selector) 
+                return `await page.evaluate((selector) => {
+    const el = document.querySelector(selector);
+    if (el) { 
+        el.scrollIntoView({ behavior: "smooth", block: "center" }); 
+    }
+}, "${value.to.selector}");
+`
+            else
+                return `await page.evaluate((coords) => {
+    window.scrollTo(coords.x, coords.y);
+}, ${JSON.stringify(value.to.coords)});
+`
+        } else {
+            return `await page.evaluate((by) => {
+    window.scrollBy(by.dx, by.dy);
+}, ${JSON.stringify(value.by)});
+`
+        }
+    }
+
     handlePress(value) {
         return `await page.keyboard.press("${value.key}")\n`
     }
@@ -197,25 +287,92 @@ class PlaywrightHandler extends FrameworkHandler {
     }
 
     handleBaseline_scan(value) {
-        return `await baselineScanPipeline(page, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed' })}, 'playwright');\n`
+        return `await baselineScanPipeline(page, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed', delay: value.delay })}, 'playwright');\n`
     }
 
     handleEOF(value) {
-        return ((value.operation === "close") ? `await browser.close()\n` : `await browser.disconnect()\n`)
+        return `await browser.close()\n`
+    }
+
+    handleScroll(value) {
+        if (value.to) {
+            if (value.to.selector) 
+                return `await page.evaluate((selector) => {
+    const el = document.querySelector(selector);
+    if (el) { 
+        el.scrollIntoView({ behavior: "smooth", block: "center" }); 
+    }
+}, "${value.to.selector}");
+`
+            else
+                return `await page.evaluate((coords) => {
+    window.scrollTo(coords.x, coords.y);
+}, ${JSON.stringify(value.to.coords)});
+`
+        } else {
+            return `await page.evaluate((by) => {
+    window.scrollBy(by.dx, by.dy);
+}, ${JSON.stringify(value.by)});
+`
+        }
     }
 
     getAssertionCode() {
         return `
 async function checkAssertion(page, options) {
-    if(options.timeout) 
-        await page.waitForSelector(options.selector, { timeout: parseTimeout(options.timeout) })
-    
-    const text = await page.textContent(options.selector)
-    
-    if(options.contains) {
-        return text.includes(options.contains)
-    } else {
-        return (options.exists)? !!text: !text;   
+    try {
+        // Handle timeout option
+        if(options.timeout) {
+            await page.waitForSelector(options.selector, { timeout: parseTimeout(options.timeout) })
+        }
+        
+        // Get element and text content
+        const element = await page.$(options.selector)
+        if (!element && options.exists !== false) {
+            throw new Error(\`Element not found: \${options.selector}\`)
+        }
+        
+        const text = element ? (await page.textContent(options.selector))?.trim() || '' : ''
+        
+        // Perform assertions based on type
+        let result = true
+        let message = ''
+        
+        if (options.contains) {
+            result = text.includes(options.contains)
+            message = \`Expected text to contain "\${options.contains}", but got: "\${text}"\`
+        } else if (options.equals) {
+            result = text === options.equals
+            message = \`Expected text to equal "\${options.equals}", but got: "\${text}"\`
+        } else if (options.matches) {
+            const regex = new RegExp(options.matches)
+            result = regex.test(text)
+            message = \`Expected text to match pattern \${regex}, but got: "\${text}"\`
+        } else if (options.hasOwnProperty('exists')) {
+            result = options.exists ? !!element : !element
+            message = \`Expected element to \${options.exists ? 'exist' : 'not exist'}\`
+        } else if (options.visible !== undefined) {
+            const isVisible = element ? await element.isVisible() : false
+            result = options.visible ? isVisible : !isVisible
+            message = \`Expected element to be \${options.visible ? 'visible' : 'hidden'}\`
+        }
+        
+        if (!result) {
+            console.error(\`❌ Assertion failed: \${message}\`)
+            if (options.throwOnFail !== false) {
+                throw new Error(\`Assertion failed: \${message}\`)
+            }
+        } else {
+            console.log(\`✅ Assertion passed: \${options.selector}\`)
+        }
+        
+        return result
+    } catch (error) {
+        console.error(\`❌ Assertion error: \${error.message}\`)
+        if (options.throwOnFail !== false) {
+            throw error
+        }
+        return false
     }
 }
 `
@@ -229,7 +386,7 @@ class SeleniumHandler extends FrameworkHandler {
     }
 
     handleFramework() {
-        return `${this.getAdditionalCode()}\nimport { Builder, By, until } from 'selenium-webdriver'\nlet driver;\n${this.getAssertionCode()}\n`
+        return `${this.getAdditionalCode()}\nimport fs from "node:fs";\nimport { Builder, By, until } from 'selenium-webdriver'\nlet driver;\n${this.getAssertionCode()}\n`
     }
 
     handleBrowser(value) {
@@ -237,7 +394,7 @@ class SeleniumHandler extends FrameworkHandler {
             case "launch":
                 return `driver = await new Builder().forBrowser('chrome').build();\n`
             case "connect":
-                return `// Connect mode not directly supported in basic Selenium setup\n`
+                return `driver = await new Builder().forBrowser("chrome").usingServer("${value.connect.wsUrl}").build()\n`
         }
     }
 
@@ -254,7 +411,7 @@ class SeleniumHandler extends FrameworkHandler {
     }
 
     handleScreenshot(value) {
-        return `await driver.takeScreenshot().then(data => require('fs').writeFileSync("${value.path}", data, 'base64'))\n`
+        return `await driver.takeScreenshot().then(data => fs.writeFileSync("${value.path}", data, 'base64'))\n`
     }
 
     handleType(value) {
@@ -281,7 +438,7 @@ class SeleniumHandler extends FrameworkHandler {
     }
 
     handleClose() {
-        return `await driver.quit()\n`
+        return `await driver.close()\n`
     }
 
     handleWait(value) {
@@ -293,26 +450,97 @@ class SeleniumHandler extends FrameworkHandler {
     }
 
     handleBaseline_scan(value) {
-        return `await baselineScanPipeline(driver, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed' })}, 'selenium');\n`
+        return `await baselineScanPipeline(driver, ${JSON.stringify({ includeAvailability: value.availability, baselineYearThreshold: value.year, includeNotBaseline: true, strictness: 'relaxed', delay: value.delay })}, 'selenium');\n`
     }
 
     handleEOF(value) {
-        return ((value.operation === "close") ? `await driver.quit()\n` : `await driver.close()\n`)
+        return `await driver.quit()\n`
+    }
+
+    handleScroll(value) {
+        if (value.to) {
+            if (value.to.selector) 
+                return `await driver.executeScript(\`
+    const el = document.querySelector('${value.to.selector}');
+    if (el) { 
+        el.scrollIntoView({ behavior: "smooth", block: "center" }); 
+    }
+\`);
+`
+            else
+                return `await driver.executeScript(\`
+    window.scrollTo(${value.to.coords.x}, ${value.to.coords.y});
+\`);
+`
+        } else {
+            return `await driver.executeScript(\`
+    window.scrollBy(${value.by.dx}, ${value.by.dy});
+\`);
+`
+        }
     }
 
     getAssertionCode() {
         return `
 async function checkAssertion(driver, options) {
-    if(options.timeout) 
-        await driver.wait(until.elementLocated(By.css(options.selector)), parseTimeout(options.timeout))
-    
-    const element = await driver.findElement(By.css(options.selector))
-    const text = await element.getText()
-    
-    if(options.contains) {
-        return text.includes(options.contains)
-    } else {
-        return (options.exists)? !!text: !text;   
+    try {
+        // Handle timeout option
+        if(options.timeout) {
+            await driver.wait(until.elementLocated(By.css(options.selector)), parseTimeout(options.timeout))
+        }
+        
+        // Get element and text content
+        let element = null
+        let text = ''
+        
+        try {
+            element = await driver.findElement(By.css(options.selector))
+            text = element ? (await element.getText()).trim() : ''
+        } catch (e) {
+            if (options.exists !== false) {
+                throw new Error(\`Element not found: \${options.selector}\`)
+            }
+        }
+        
+        // Perform assertions based on type
+        let result = true
+        let message = ''
+        
+        if (options.contains) {
+            result = text.includes(options.contains)
+            message = \`Expected text to contain "\${options.contains}", but got: "\${text}"\`
+        } else if (options.equals) {
+            result = text === options.equals
+            message = \`Expected text to equal "\${options.equals}", but got: "\${text}"\`
+        } else if (options.matches) {
+            const regex = new RegExp(options.matches)
+            result = regex.test(text)
+            message = \`Expected text to match pattern \${regex}, but got: "\${text}"\`
+        } else if (options.hasOwnProperty('exists')) {
+            result = options.exists ? !!element : !element
+            message = \`Expected element to \${options.exists ? 'exist' : 'not exist'}\`
+        } else if (options.visible !== undefined) {
+            const isVisible = element ? await element.isDisplayed() : false
+            result = options.visible ? isVisible : !isVisible
+            message = \`Expected element to be \${options.visible ? 'visible' : 'hidden'}\`
+        }
+        
+        if (!result) {
+            console.error(\`❌ Assertion failed: \${message}\`)
+            if (options.throwOnFail !== false) {
+                throw new Error(\`Assertion failed: \${message}\`)
+            }
+        } else {
+            console.log(\`✅ Assertion passed: \${options.selector}\`)
+        }
+        
+        return result
+    } catch (error) {
+        console.error(\`❌ Assertion error: \${error.message}\`)
+        if (options.throwOnFail !== false) {
+            throw error
+        }
+        return false
     }
 }
 `

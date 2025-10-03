@@ -48,13 +48,32 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
     }
   }, [isOpen]);
 
-  const downloadScreenshot = (filename) => {
-    const link = document.createElement("a");
-    link.href = API_ENDPOINTS.SCREENSHOT_FILE(filename);
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const downloadScreenshot = async (filename) => {
+    try {
+      // First, try to fetch the image as a blob for proper download
+      const response = await fetch(API_ENDPOINTS.SCREENSHOT_FILE(filename));
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up the object URL
+        window.URL.revokeObjectURL(url);
+      } else {
+        // Fallback: Open in new tab if fetch fails
+        window.open(API_ENDPOINTS.SCREENSHOT_FILE(filename), '_blank');
+      }
+    } catch (error) {
+      console.warn("Failed to download as blob, opening in new tab:", error);
+      // Fallback: Open in new tab if blob download fails
+      window.open(API_ENDPOINTS.SCREENSHOT_FILE(filename), '_blank');
+    }
   };
 
   const deleteScreenshot = async (filename) => {

@@ -1,22 +1,47 @@
 # BaseScript
 
-A modern browser automation framework that compiles YAML configurations into executable JavaScript code for Puppeteer, Playwright, and Selenium WebDriver.
+**A Baseline-Aware Scripting Language for Web Automation with Built-In Feature Compatibility Intelligence**
+
+BaseScript is a modern browser automation framework that compiles YAML configurations into executable JavaScript code for Puppeteer, Playwright, and Selenium WebDriver. Beyond standard automation, BaseScript uniquely integrates **Baseline data** to analyze and verify web feature compatibility during both script generation and automated browsing sessions.
 
 ![BaseScript Architecture](https://img.shields.io/badge/Architecture-Microservices-blue)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
 ![Frontend](https://img.shields.io/badge/Frontend-React-61DAFB?logo=react)
 ![Backend](https://img.shields.io/badge/Backend-Node.js-339933?logo=node.js)
 
+![BaseScript Playground](/docs/img/playground_0.png)
+
 ## ✨ Features
 
 - **🎯 Multi-Framework Support**: Write once, run on Puppeteer, Playwright, or Selenium
-- **📝 YAML Configuration**: Human-readable automation scripts
+- **📝 YAML Configuration**: Human-readable automation scripts with plain English support
+- **🔍 Baseline Intelligence**: Real-time web feature compatibility analysis and recommendations
+- **🚨 Compatibility Alerts**: Dynamic DOM scanning for non-baseline HTML, CSS, and JavaScript features
 - **🖥️ Live Browser Preview**: Real-time VNC connection to see your automation
 - **📸 Screenshot Gallery**: Capture and manage screenshots during automation
-- **🔧 Code Compilation**: View compiled JavaScript output
+- **🔧 Code Compilation**: View compiled JavaScript output with baseline-aware optimizations
 - **🎨 Modern Web Interface**: Dark/light theme with glassmorphism design
 - **🐳 Docker Ready**: Complete containerized setup with Docker Compose
 - **⚡ Redis Integration**: Fast caching and browser state management
+- **📊 Feature Support Dashboard**: Visual feedback on web platform feature usage
+
+## 🧬 Baseline Integration
+
+BaseScript's core innovation is its integration with **Baseline data** - a comprehensive database of web platform feature support across browsers. This enables:
+
+### Real-Time Feature Analysis
+- **DOM Scanning**: Automatically detects usage of HTML, CSS, and JavaScript features
+- **Compatibility Scoring**: Evaluates feature support based on baseline thresholds
+- **Visual Feedback**: Highlights potential compatibility issues during automation
+- **Actionable Recommendations**: Provides specific guidance for addressing compatibility gaps
+
+### Baseline-Aware Actions
+```yaml
+- baseline_scan:
+    availability: ["high", "low"]  # Baseline availability levels to check
+    year: 2023                     # Baseline year threshold
+    delay: "2s"                    # Wait time before scanning
+```
 
 ## 🏗️ Architecture
 
@@ -204,13 +229,14 @@ browser:
 |--------|-------------|------------|
 | `goto` | Navigate to URL | All |
 | `click` | Click element or coordinates | All |
+| `scroll` | Scroll to a specific element or coordinates, or scroll by relative pixel amounts | All |
 | `type` | Type text into element | All |
 | `press` | Press keyboard key | All |
 | `screenshot` | Capture screenshot | All |
 | `wait` | Wait for timeout | All |
 | `waitForSelector` | Wait for element | All |
 | `assert` | Assert element properties | All |
-| `emulate` | Emulate device | Puppeteer/Playwright |
+| `emulate` | Emulate device | Puppeteer |
 | `hover` | Hover over element | All |
 | `focus` | Focus element | All |
 
@@ -223,7 +249,8 @@ browser:
 | `GET` | `/` | Service status |
 | `POST` | `/run` | Compile and execute script |
 | `GET` | `/screenshots` | List available screenshots |
-| `GET` | `/:filename` | Download screenshot file |
+| `GET` | `/screenshots/:filename` | Download screenshot file |
+| `DELETE` | `/screenshots/:filename` | Delete a screenshot |
 
 ### Example Usage
 
@@ -386,4 +413,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**BaseScript** - Making browser automation accessible to everyone! 🚀
+**BaseScript** - Making web automation smarter with baseline-aware feature compatibility intelligence! 🚀
+
+*Democratizing web automation while accelerating the safe adoption of modern web features through real-time compatibility insights.*

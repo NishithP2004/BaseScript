@@ -2,7 +2,7 @@ FROM selenium/standalone-chrome
 
 USER root
 
-EXPOSE 7900 9222 8080
+EXPOSE 7900 9222 8080 4444
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

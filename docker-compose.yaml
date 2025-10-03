@@ -26,6 +26,7 @@ services:
         - 9222:9222     # Direct Chrome DevTools access
         - 8080:8080     # Caddy reverse proxy
         - 7900:7900     # VNC
+        - 4444:4444     # Selenium Browser Hub
       build: ./browser
       environment:
         - REDIS_HOST=redis

@@ -1,5 +1,5 @@
 import YAML from "yaml"
-import z from "zod"
+import z, { refine } from "zod"
 import { KnownDevices } from "puppeteer"
 
 const stepsSchema = z.object({
@@ -35,6 +35,23 @@ const stepsSchema = z.object({
     }).refine(data => data.selector || data.coords, {
         message: "Either selector or coords must be provided"
     }).optional(),
+    scroll: z.object({
+        to: z.object({
+            selector: z.string().optional(),
+            coords: z.object({
+                x: z.number(),
+                y: z.number()
+            }).optional()
+        }).refine(data => data.selector || data.coords, {
+            message: "Either selector or coords must be provided"
+        }).optional(),
+        by: z.object({
+            dx: z.number(),
+            dy: z.number()
+        }).optional()
+    }).refine(data => data.to || data.by, {
+        message: "Either to or by must be provided"
+    }).optional(),
     press: z.object({
         key: z.string()
     }).optional(),
@@ -46,15 +63,24 @@ const stepsSchema = z.object({
     }).optional(),
     baseline_scan: z.object({
         availability: z.array(z.enum(["high", "low", "false"])),
-        year: z.number()
+        year: z.number(),
+        delay: z.string().regex(/(\d+)(ms|m|s)*/).optional()
     }).optional(),
     assert: z.object({
         selector: z.string(),
         exists: z.boolean().optional(),
         contains: z.string().optional(),
-        timeout: z.string().regex(/(\d+)(ms|m|s)*/).optional()
-    }).refine(data => data.exists || data.contains, {
-        message: "Either 'exists' or 'contains' must be provided"
+        equals: z.string().optional(),
+        matches: z.string().optional(),
+        visible: z.boolean().optional(),
+        timeout: z.string().regex(/(\d+)(ms|m|s)*/).optional(),
+        throwOnFail: z.boolean().default(false).optional()
+    }).refine(data => {
+        const assertionTypes = [data.exists, data.contains, data.equals, data.matches, data.visible]
+        const definedAssertions = assertionTypes.filter(type => type != undefined).length
+        return definedAssertions >= 1
+    }, {
+        message: "At least one assertion type must be provided (exists, contains, equals, matches, or visible)"
     }).optional(),
     close: z.boolean().optional()
 })
@@ -89,7 +115,7 @@ function parse(code) {
     try {
         const doc = YAML.parse(code)
         return schema.parse(doc)
-    } catch(err) {
+    } catch (err) {
         console.error(`Error parsing YAML document: ${err.message}`)
     }
 }
@@ -98,9 +124,9 @@ const cmds = ["framework", "browser", "emulate", "newPage", "goto", "wait", "wai
 
 function generateIR(doc) {
     const ast = []
-    for(let key of Object.keys(doc)) {
-        if(key === "steps") {
-            for(let obj of doc["steps"]) {
+    for (let key of Object.keys(doc)) {
+        if (key === "steps") {
+            for (let obj of doc["steps"]) {
                 let k = Object.keys(obj)[0]
 
                 ast.push({
@@ -120,7 +146,7 @@ function generateIR(doc) {
 
     ast.push({
         cmd: "EOF",
-        value: { operation: (mode === "launch")? "close": "disconnect" }
+        value: { operation: (mode === "launch") ? "close" : "disconnect" }
     })
 
     return ast

@@ -56,7 +56,11 @@ steps:
       fullPage: true
   - close: true`;
 
-  const [value, setValue] = useState(boilerplate);
+  const [value, setValue] = useState(() => {
+    // Try to load from sessionStorage first, fallback to boilerplate
+    const savedCode = sessionStorage.getItem('playground-code');
+    return savedCode || boilerplate;
+  });
   
   // Use preferences hook for persistent state
   const {
@@ -134,6 +138,8 @@ steps:
 
   const onChange = useCallback((val) => {
     setValue(val);
+    // Save to sessionStorage for persistence
+    sessionStorage.setItem('playground-code', val);
   }, []);
 
   const handleRun = async () => {
@@ -197,7 +203,10 @@ steps:
 
   const loadExample = (example) => {
     if (examples[example]) {
-      setValue(examples[example]);
+      const exampleCode = examples[example];
+      setValue(exampleCode);
+      // Save the loaded example to sessionStorage
+      sessionStorage.setItem('playground-code', exampleCode);
     }
   };
 
