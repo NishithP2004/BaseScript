@@ -2,6 +2,7 @@ import { VncScreen } from "react-vnc";
 import CodeMirror from "@uiw/react-codemirror";
 import { yaml } from "@codemirror/lang-yaml";
 import { javascript } from "@codemirror/lang-javascript";
+import { keymap } from "@codemirror/view";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { duotoneDark, duotoneLight } from "@uiw/codemirror-theme-duotone";
 import { githubLight } from "@uiw/codemirror-theme-github";
@@ -583,24 +584,26 @@ steps:
           {/* Editor Content */}
           <div className={`flex-1 overflow-hidden ${primaryTextColor}`}>
             {currentActiveTab === "script" ? (
-              <CodeMirror
-                value={value}
-                height="100%"
-                extensions={[yaml()]}
-                onChange={onChange}
-                theme={editorTheme}
-                basicSetup={{
-                  lineNumbers: true,
-                  foldGutter: true,
-                  dropCursor: false,
-                  allowMultipleSelections: false,
-                  indentOnInput: true,
-                  bracketMatching: true,
-                  closeBrackets: true,
-                  autocompletion: true,
-                  highlightSelectionMatches: false,
-                }}
-              />
+              <div className="h-full overflow-auto">
+                <CodeMirror
+                  value={value}
+                  height="100%"
+                  extensions={[yaml()]}
+                  onChange={onChange}
+                  theme={editorTheme}
+                  basicSetup={{
+                    lineNumbers: true,
+                    foldGutter: true,
+                    dropCursor: false,
+                    allowMultipleSelections: false,
+                    indentOnInput: true,
+                    bracketMatching: true,
+                    closeBrackets: true,
+                    autocompletion: true,
+                    highlightSelectionMatches: false,
+                  }}
+                />
+              </div>
             ) : (
               <div className="h-full overflow-auto relative">
                 <CodeMirror
@@ -608,29 +611,21 @@ steps:
                   height="auto"
                   minHeight="100%"
                   extensions={[javascript()]}
-                  onChange={() => {}} // Read-only
+                  onChange={(val) => setCompiledCode(val)}
                   theme={editorTheme}
-                  editable={false}
+                  editable={true}
                   basicSetup={{
                     lineNumbers: true,
                     foldGutter: true,
                     dropCursor: false,
                     allowMultipleSelections: false,
-                    indentOnInput: false,
+                    indentOnInput: true,
                     bracketMatching: true,
-                    closeBrackets: false,
-                    autocompletion: false,
+                    closeBrackets: true,
+                    autocompletion: true,
                     highlightSelectionMatches: false,
                   }}
                 />
-                {/* Scroll indicator */}
-                <div className={`absolute top-2 right-2 px-2 py-1 text-xs rounded-full ${
-                  isDarkMode 
-                    ? "bg-slate-900/90 text-slate-200 border border-slate-700" 
-                    : "bg-white/90 text-slate-700 border border-slate-300"
-                } backdrop-blur-sm`}>
-                  🔒 Read-only
-                </div>
               </div>
             )}
           </div>
@@ -663,11 +658,6 @@ steps:
                   <span>🔧</span>
                   <span>{currentActiveTab === "script" ? "YAML" : "JS"}</span>
                 </span>
-                {currentActiveTab === "compiled" && (
-                  <span className="flex items-center space-x-1" title="Read-only">
-                    <span>🔒</span>
-                  </span>
-                )}
               </div>
               <div className="flex items-center space-x-2">
                 {isRunning && (

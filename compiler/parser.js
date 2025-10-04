@@ -120,8 +120,6 @@ function parse(code) {
     }
 }
 
-const cmds = ["framework", "browser", "emulate", "newPage", "goto", "wait", "waitForSelector", "screenshot", "type", "click", "press", "focus", "hover", "baseline_scan", "assert", "close"]
-
 function generateIR(doc) {
     const ast = []
     for (let key of Object.keys(doc)) {

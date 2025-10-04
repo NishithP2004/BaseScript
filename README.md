@@ -2,7 +2,7 @@
 
 **A Baseline-Aware Scripting Language for Web Automation with Built-In Feature Compatibility Intelligence**
 
-BaseScript is a modern browser automation framework that compiles YAML configurations into executable JavaScript code for Puppeteer, Playwright, and Selenium WebDriver. Beyond standard automation, BaseScript uniquely integrates **Baseline data** to analyze and verify web feature compatibility during both script generation and automated browsing sessions.
+BaseScript is a modern browser automation framework that compiles YAML configurations into executable JavaScript code for Puppeteer, Playwright, and Selenium WebDriver. Beyond standard automation, BaseScript uniquely integrates **Baseline data** to analyze and verify web feature compatibility during automated browsing sessions.
 
 ![BaseScript Architecture](https://img.shields.io/badge/Architecture-Microservices-blue)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
@@ -15,25 +15,26 @@ BaseScript is a modern browser automation framework that compiles YAML configura
 
 - **🎯 Multi-Framework Support**: Write once, run on Puppeteer, Playwright, or Selenium
 - **📝 YAML Configuration**: Human-readable automation scripts with plain English support
-- **🔍 Baseline Intelligence**: Real-time web feature compatibility analysis and recommendations
-- **🚨 Compatibility Alerts**: Dynamic DOM scanning for non-baseline HTML, CSS, and JavaScript features
+- **🔍 Baseline Intelligence**: Real-time CSS feature compatibility analysis and recommendations
+- **🚨 Compatibility Alerts**: Dynamic DOM scanning for non-baseline CSS features
 - **🖥️ Live Browser Preview**: Real-time VNC connection to see your automation
 - **📸 Screenshot Gallery**: Capture and manage screenshots during automation
-- **🔧 Code Compilation**: View compiled JavaScript output with baseline-aware optimizations
+- **🔧 Code Compilation**: View compiled JavaScript output 
 - **🎨 Modern Web Interface**: Dark/light theme with glassmorphism design
 - **🐳 Docker Ready**: Complete containerized setup with Docker Compose
 - **⚡ Redis Integration**: Fast caching and browser state management
-- **📊 Feature Support Dashboard**: Visual feedback on web platform feature usage
+- **📊 Feature Support Dashboard**: Visual feedback on CSS feature usage
+- **💻 CLI Support**: Command-line interface for script execution and compilation
 
 ## 🧬 Baseline Integration
 
 BaseScript's core innovation is its integration with **Baseline data** - a comprehensive database of web platform feature support across browsers. This enables:
 
 ### Real-Time Feature Analysis
-- **DOM Scanning**: Automatically detects usage of HTML, CSS, and JavaScript features
-- **Compatibility Scoring**: Evaluates feature support based on baseline thresholds
-- **Visual Feedback**: Highlights potential compatibility issues during automation
-- **Actionable Recommendations**: Provides specific guidance for addressing compatibility gaps
+- **DOM Scanning**: Automatically detects usage of CSS features in stylesheets and computed styles
+- **Compatibility Scoring**: Evaluates CSS feature support based on baseline thresholds
+- **Visual Feedback**: Highlights potential CSS compatibility issues during automation
+- **Actionable Recommendations**: Provides specific guidance for addressing CSS compatibility gaps
 
 ### Baseline-Aware Actions
 ```yaml
@@ -94,6 +95,27 @@ docker-compose up -d
 - **VNC**: http://localhost:7900
 - **Chrome DevTools**: http://localhost:8080
 
+### CLI Usage
+
+BaseScript includes a command-line interface for compiling and executing scripts:
+
+```bash
+# Compile and execute a BaseScript file
+node compiler/cli.js script.bs
+
+# Compile only (don't execute)
+node compiler/cli.js script.bs --compile-only
+
+# Specify output file
+node compiler/cli.js script.bs --output automation.js
+
+# Verbose output
+node compiler/cli.js script.bs --verbose
+
+# Show help
+node compiler/cli.js --help
+```
+
 ### Local Development
 
 1. Install dependencies for each component:
@@ -131,76 +153,21 @@ npm run dev
 
 ## 📝 Writing Automation Scripts
 
-BaseScript uses YAML configuration files to define browser automation workflows:
-
-### Basic Example
-
-```yaml
-framework: puppeteer
-browser: 
-  mode: connect
-  connect:
-    wsUrl: "ws://browser:9222"
-steps:
-  - goto:
-      url: "https://example.com"
-  - screenshot:
-      path: "screenshots/screenshot.png"
-      fullPage: true
-  - close: true
-```
-
-### Form Automation
-
-```yaml
-framework: playwright
-browser:
-  mode: connect
-  connect:
-    wsUrl: "ws://browser:9222"
-steps:
-  - goto:
-      url: "https://httpbin.org/forms/post"
-  - type:
-      selector: "input[name='custname']"
-      text: "John Doe"
-  - type:
-      selector: "input[name='custtel']"
-      text: "555-1234"
-  - click:
-      selector: "input[type='submit']"
-  - screenshot:
-      path: "screenshots/form_result.png"
-```
-
-### Testing & Assertions
-
-```yaml
-framework: selenium
-browser:
-  mode: connect
-  connect:
-    wsUrl: "ws://browser:9222"
-steps:
-  - goto:
-      url: "https://github.com"
-  - assert:
-      selector: "h1"
-      contains: "GitHub"
-  - click:
-      selector: "[data-target='qbsearch-input.inputButton']"
-  - type:
-      selector: "#query-builder-test"
-      text: "basescript"
-  - press:
-      key: "Enter"
-  - waitForSelector:
-      selector: ".search-title"
-  - screenshot:
-      path: "screenshots/search_results.png"
-```
+BaseScript uses YAML configuration files to define browser automation workflows. For a complete reference of all available commands and their parameters, see [Commands Reference](docs/commands.md).
 
 ## 🎛️ Configuration Options
+
+For detailed information about all configuration options, commands, and parameters, please refer to the [Commands Reference](docs/commands.md).
+
+### Key Command Categories
+
+- **🌐 Navigation**: `goto`, `newPage`, `emulate`
+- **⏱ Waiting**: `wait`, `waitForSelector`
+- **🖱 Interaction**: `click`, `type`, `press`, `focus`, `hover`, `scroll`
+- **📸 Capture**: `screenshot`
+- **✅ Testing**: `assert`
+- **🔬 Baseline**: `baseline_scan`
+- **🛠 Control**: `close`
 
 ### Browser Modes
 
@@ -337,11 +304,14 @@ BaseScript/
 │   ├── compiler.js     # Main compilation logic
 │   ├── parser.js       # YAML parsing and validation
 │   ├── server.js       # Express server
+│   ├── cli.js          # Command-line interface
 │   └── package.json
 ├── browser/           # Chrome container
 │   ├── Dockerfile
 │   ├── Caddyfile      # Reverse proxy config
 │   └── monitor_chrome.sh
+├── docs/              # Documentation
+│   └── commands.md    # Complete command reference
 └── docker-compose.yaml
 ```
 
@@ -349,7 +319,8 @@ BaseScript/
 
 1. Update the schema in [`compiler/parser.js`](compiler/parser.js)
 2. Add handler methods to framework classes in [`compiler/compiler.js`](compiler/compiler.js)
-3. Test with example scripts
+3. Update the [Commands Reference](docs/commands.md)
+4. Test with example scripts
 
 ### Contributing
 
@@ -357,7 +328,8 @@ BaseScript/
 2. Create a feature branch
 3. Make your changes
 4. Add tests if applicable
-5. Submit a pull request
+5. Update documentation in [docs/commands.md](docs/commands.md) if adding new commands
+6. Submit a pull request
 
 ## 📊 Monitoring & Debugging
 
@@ -391,6 +363,13 @@ Access the browser directly via VNC:
 - URL: `http://localhost:7900`
 - Password: `secret`
 
+## 📚 Documentation
+
+- **[Commands Reference](docs/commands.md)** - Complete guide to all BaseScript commands and parameters
+- **[API Documentation](docs/api.md)** - REST API endpoints and usage
+- **[Examples](examples/)** - Sample scripts and use cases
+- **[Architecture Guide](docs/architecture.md)** - Detailed system architecture
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -400,19 +379,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: Report bugs and feature requests on GitHub Issues
 - **Discussions**: Join the community discussions
 - **Documentation**: Check the [docs](docs/) folder for detailed guides
+- **Commands**: See [Commands Reference](docs/commands.md) for complete syntax documentation
 
 ## 🔮 Roadmap
 
-- [ ] Visual script builder
-- [ ] Plugin system for custom actions
-- [ ] Cloud deployment templates
-- [ ] Performance monitoring
-- [ ] Multi-browser support (Firefox, Safari)
-- [ ] Parallel execution
-- [ ] Test reporting and analytics
+- [ ] HTML and JavaScript baseline feature support
+- [ ] Visual script builder interface
+- [ ] Enhanced baseline compatibility reporting
+- [ ] Multi-browser support (Firefox, Safari, Edge)
+- [ ] Performance monitoring and analytics
+- [ ] Mobile automation support
 
 ---
 
 **BaseScript** - Making web automation smarter with baseline-aware feature compatibility intelligence! 🚀
 
 *Democratizing web automation while accelerating the safe adoption of modern web features through real-time compatibility insights.*
+
+> 📖 **New to BaseScript?** Start with the [Commands Reference](docs/commands.md) to learn all available automation commands and their usage.

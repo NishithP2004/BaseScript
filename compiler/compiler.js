@@ -4,7 +4,6 @@ import {
 } from "./parser.js"
 import fs from "node:fs"
 import {
-    execSync,
     spawn
 } from "node:child_process"
 import { parseTimeout } from "./utils.js";
@@ -43,7 +42,7 @@ class PuppeteerHandler extends FrameworkHandler {
             case "launch":
                 return `browser = await puppeteer.launch(${JSON.stringify(value.launch, null, 2)})\npage = await browser.newPage();\n`
             case "connect":
-                return `browser = await puppeteer.connect({ "browserWSEndpoint": "${value.connect.wsUrl}" })\npage = await browser.newPage();\n`
+                return `browser = await puppeteer.connect({ "browserWSEndpoint": "${value.connect.wsUrl}", defaultViewport: null })\npage = await browser.newPage();\n`
         }
     }
 
@@ -392,9 +391,9 @@ class SeleniumHandler extends FrameworkHandler {
     handleBrowser(value) {
         switch (value.mode) {
             case "launch":
-                return `driver = await new Builder().forBrowser('chrome').build();\n`
+                return `driver = await new Builder().forBrowser('chrome').build();\nawait driver.manage().window().maximize();\n`
             case "connect":
-                return `driver = await new Builder().forBrowser("chrome").usingServer("${value.connect.wsUrl}").build()\n`
+                return `driver = await new Builder().forBrowser("chrome").usingServer("${value.connect.wsUrl}").build()\nawait driver.manage().window().maximize()\n`
         }
     }
 
@@ -606,10 +605,6 @@ async function run(code, io) {
         console.log(compiled)
 
         fs.writeFileSync("output.js", compiled)
-
-        /* execSync("node output.js", {
-            encoding: "utf-8"
-        }) */
 
         await spawnChildProcess(io) 
         
