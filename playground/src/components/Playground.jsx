@@ -44,6 +44,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 function Playground() {
+  const vncUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/vnc/websockify`;
   const boilerplate = `framework: puppeteer
 browser: 
   mode: connect
@@ -444,7 +445,8 @@ steps:
             <div className={`h-full ${isDarkMode ? "bg-slate-900/40" : "bg-white/70"} backdrop-blur-sm p-4`}>
               {!isVncZoomed && (
                 <VncScreen
-                url="ws://localhost:7900/websockify"
+                // url="ws://localhost:7900/websockify"
+                url={vncUrl}
                 scaleViewport
                 background="rgba(0, 0, 0, 0.1)"
                 style={{
@@ -690,7 +692,8 @@ steps:
               </div>
               <div className={`${isDarkMode ? "bg-slate-900/40" : "bg-white/70"} backdrop-blur-sm w-full h-[calc(100%-48px)] p-3`}>
                 <VncScreen
-                  url="ws://localhost:7900/websockify"
+                  // url="ws://localhost:7900/websockify"
+                  url={vncUrl}
                   scaleViewport
                   background="rgba(0, 0, 0, 0.1)"
                   style={{

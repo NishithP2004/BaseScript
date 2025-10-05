@@ -25,12 +25,13 @@ let socketListeners = new Map();
 const initializeSocket = () => {
   if (!globalSocket) {
     console.log('Terminal: Initializing global socket connection...');
-    globalSocket = io('http://localhost:3000', {
+    globalSocket = io(window.location.href, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      path: "/api/socket.io"
     });
 
     globalSocket.on('connect', () => {
