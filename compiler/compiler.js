@@ -574,19 +574,28 @@ function compile(ir) {
     return code
 }
 
-async function spawnChildProcess(io) {
+async function spawnChildProcess(mode="socket", io) {
     const ps = spawn("node", ["output.js"])
     return new Promise((resolve, reject) => {
         ps.stdout.on("data", chunk => {
-            io.to("output-stream").emit("output", Buffer.from(chunk).toString("utf-8"))
+            if(mode === "socket")
+                io.to("output-stream").emit("output", Buffer.from(chunk).toString("utf-8"))
+            else 
+                console.log(Buffer.from(chunk).toString("utf-8"))
         })
 
         ps.stderr.on("data", chunk => {
-            io.to("output-stream").emit("output", Buffer.from(chunk).toString("utf-8"))
+            if(mode === "socket")
+                io.to("output-stream").emit("output", Buffer.from(chunk).toString("utf-8"))
+            else 
+                console.error(Buffer.from(chunk).toString("utf-8"))
         })
 
         ps.on("close", code => {
-            io.to("output-stream").emit("output", `Child process exited with code: ${code}`)
+            if(mode === "socket")
+                io.to("output-stream").emit("output", `Child process exited with code: ${code}`)
+            else 
+                console.log(`Child process exited with code: ${code}`)
             resolve()
         })
     })
@@ -606,7 +615,7 @@ async function run(code, io) {
 
         fs.writeFileSync("output.js", compiled)
 
-        await spawnChildProcess(io) 
+        await spawnChildProcess("socket", io) 
         
         return compiled
     } catch (err) {
@@ -617,5 +626,6 @@ async function run(code, io) {
 
 export {
     compile,
-    run
+    run,
+    spawnChildProcess
 }

@@ -1,8 +1,9 @@
+#!/usr/bin/env node
+
 import { parse, generateIR } from "./parser.js"
-import { compile } from "./compiler.js"
+import { compile, spawnChildProcess } from "./compiler.js"
 import fs from "node:fs"
 import path from "node:path"
-import { execSync } from "node:child_process"
 
 const showHelp = () => {
     console.log(`
@@ -40,7 +41,7 @@ const parseArgs = () => {
     return parsed
 }
 
-const main = () => {
+const main = async () => {
     try {
         const args = parseArgs()
         if (args.help) return showHelp()
@@ -57,8 +58,18 @@ const main = () => {
         if (args.verbose) console.log("Generating IR...")
         const ir = generateIR(parsed)
 
+        if (args.verbose) {
+            console.log("Intermediate Representation:")
+            console.table(ir)
+        }
+
         if (args.verbose) console.log("Compiling...")
         const compiled = compile(ir)
+
+        if (args.verbose) {
+            console.log("Compiled Code:")
+            console.log(compiled)
+        }
 
         fs.mkdirSync(path.dirname(args.outputFile), { recursive: true })
         fs.writeFileSync(args.outputFile, compiled)
@@ -66,8 +77,7 @@ const main = () => {
 
         if (!args.compileOnly) {
             if (args.verbose) console.log("Executing...")
-            const output = execSync(`node "${args.outputFile}"`, { encoding: "utf-8" })
-            console.log(output)
+            await spawnChildProcess("stdio")
         }
     } catch (e) {
         console.error("Error:", e.message)
