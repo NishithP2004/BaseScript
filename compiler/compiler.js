@@ -23,7 +23,7 @@ class FrameworkHandler {
     }
 
     getAdditionalCode() {
-        return `import { parseTimeout, sleep } from "./utils.js";\nimport { baselineScanPipeline } from "./baseline.js";\n`
+        return `import { parseTimeout, sleep, checkAssertion } from "./utils.js";\nimport { baselineScanPipeline } from "./baseline.js";\n`
     }
 }
 
@@ -34,7 +34,7 @@ class PuppeteerHandler extends FrameworkHandler {
     }
 
     handleFramework() {
-        return `${this.getAdditionalCode()}\nimport puppeteer, { KnownDevices } from "puppeteer";\nlet page, browser;\n${this.getAssertionCode()}\n`
+        return `${this.getAdditionalCode()}\nimport puppeteer, { KnownDevices } from "puppeteer";\nlet page, browser;\n`
     }
 
     handleBrowser(value) {
@@ -95,7 +95,7 @@ class PuppeteerHandler extends FrameworkHandler {
     }
 
     handleAssert(value) {
-        return `await checkAssertion(page, ${JSON.stringify(value, null, 2)})\n`
+        return `await checkAssertion(page, ${JSON.stringify(value, null, 2)}, "puppeteer")\n`
     }
 
     handleBaseline_scan(value) {
@@ -128,67 +128,6 @@ class PuppeteerHandler extends FrameworkHandler {
 `
         }
     }
-
-    getAssertionCode() {
-        return `
-async function checkAssertion(page, options) {
-    try {
-        // Handle timeout option
-        if(options.timeout) {
-            await page.waitForSelector(options.selector, { "timeout": parseTimeout(options.timeout) })
-        }
-        
-        // Get element and text content
-        const element = await page.$(options.selector)
-        if (!element && options.exists !== false) {
-            throw new Error(\`Element not found: \${options.selector}\`)
-        }
-        
-        const text = element ? await page.$eval(options.selector, el => el.textContent?.trim() || '') : ''
-        
-        // Perform assertions based on type
-        let result = true
-        let message = ''
-        
-        if (options.contains) {
-            result = text.includes(options.contains)
-            message = \`Expected text to contain "\${options.contains}", but got: "\${text}"\`
-        } else if (options.equals) {
-            result = text === options.equals
-            message = \`Expected text to equal "\${options.equals}", but got: "\${text}"\`
-        } else if (options.matches) {
-            const regex = new RegExp(options.matches)
-            result = regex.test(text)
-            message = \`Expected text to match pattern \${regex}, but got: "\${text}"\`
-        } else if (options.hasOwnProperty('exists')) {
-            result = options.exists ? !!element : !element
-            message = \`Expected element to \${options.exists ? 'exist' : 'not exist'}\`
-        } else if (options.visible !== undefined) {
-            const isVisible = element ? await element.isIntersectingViewport() : false
-            result = options.visible ? isVisible : !isVisible
-            message = \`Expected element to be \${options.visible ? 'visible' : 'hidden'}\`
-        }
-        
-        if (!result) {
-            console.error(\`❌ Assertion failed: \${message}\`)
-            if (options.throwOnFail !== false) {
-                throw new Error(\`Assertion failed: \${message}\`)
-            }
-        } else {
-            console.log(\`✅ Assertion passed: \${options.selector}\`)
-        }
-        
-        return result
-    } catch (error) {
-        console.error(\`❌ Assertion error: \${error.message}\`)
-        if (options.throwOnFail !== false) {
-            throw error
-        }
-        return false
-    }
-}
-`
-    }
 }
 
 // Playwright Handler
@@ -198,7 +137,7 @@ class PlaywrightHandler extends FrameworkHandler {
     }
 
     handleFramework() {
-        return `${this.getAdditionalCode()}\nimport { chromium } from 'playwright'\nlet page, browser, context;\n${this.getAssertionCode()}\n`
+        return `${this.getAdditionalCode()}\nimport { chromium } from 'playwright'\nlet page, browser, context;\n`
     }
 
     handleBrowser(value) {
@@ -282,7 +221,7 @@ class PlaywrightHandler extends FrameworkHandler {
     }
 
     handleAssert(value) {
-        return `await checkAssertion(page, ${JSON.stringify(value, null, 2)})\n`
+        return `await checkAssertion(page, ${JSON.stringify(value, null, 2)}, "playwright")\n`
     }
 
     handleBaseline_scan(value) {
@@ -315,67 +254,6 @@ class PlaywrightHandler extends FrameworkHandler {
 `
         }
     }
-
-    getAssertionCode() {
-        return `
-async function checkAssertion(page, options) {
-    try {
-        // Handle timeout option
-        if(options.timeout) {
-            await page.waitForSelector(options.selector, { timeout: parseTimeout(options.timeout) })
-        }
-        
-        // Get element and text content
-        const element = await page.$(options.selector)
-        if (!element && options.exists !== false) {
-            throw new Error(\`Element not found: \${options.selector}\`)
-        }
-        
-        const text = element ? (await page.textContent(options.selector))?.trim() || '' : ''
-        
-        // Perform assertions based on type
-        let result = true
-        let message = ''
-        
-        if (options.contains) {
-            result = text.includes(options.contains)
-            message = \`Expected text to contain "\${options.contains}", but got: "\${text}"\`
-        } else if (options.equals) {
-            result = text === options.equals
-            message = \`Expected text to equal "\${options.equals}", but got: "\${text}"\`
-        } else if (options.matches) {
-            const regex = new RegExp(options.matches)
-            result = regex.test(text)
-            message = \`Expected text to match pattern \${regex}, but got: "\${text}"\`
-        } else if (options.hasOwnProperty('exists')) {
-            result = options.exists ? !!element : !element
-            message = \`Expected element to \${options.exists ? 'exist' : 'not exist'}\`
-        } else if (options.visible !== undefined) {
-            const isVisible = element ? await element.isVisible() : false
-            result = options.visible ? isVisible : !isVisible
-            message = \`Expected element to be \${options.visible ? 'visible' : 'hidden'}\`
-        }
-        
-        if (!result) {
-            console.error(\`❌ Assertion failed: \${message}\`)
-            if (options.throwOnFail !== false) {
-                throw new Error(\`Assertion failed: \${message}\`)
-            }
-        } else {
-            console.log(\`✅ Assertion passed: \${options.selector}\`)
-        }
-        
-        return result
-    } catch (error) {
-        console.error(\`❌ Assertion error: \${error.message}\`)
-        if (options.throwOnFail !== false) {
-            throw error
-        }
-        return false
-    }
-}
-`
-    }
 }
 
 // Selenium Handler  
@@ -385,7 +263,7 @@ class SeleniumHandler extends FrameworkHandler {
     }
 
     handleFramework() {
-        return `${this.getAdditionalCode()}\nimport fs from "node:fs";\nimport { Builder, By, until } from 'selenium-webdriver'\nlet driver;\n${this.getAssertionCode()}\n`
+        return `${this.getAdditionalCode()}\nimport fs from "node:fs";\nimport { Builder, By, until } from 'selenium-webdriver'\nlet driver;\n`
     }
 
     handleBrowser(value) {
@@ -445,7 +323,7 @@ class SeleniumHandler extends FrameworkHandler {
     }
 
     handleAssert(value) {
-        return `await checkAssertion(driver, ${JSON.stringify(value, null, 2)})\n`
+        return `await checkAssertion(driver, ${JSON.stringify(value, null, 2)}, "selenium")\n`
     }
 
     handleBaseline_scan(value) {
@@ -477,72 +355,6 @@ class SeleniumHandler extends FrameworkHandler {
 \`);
 `
         }
-    }
-
-    getAssertionCode() {
-        return `
-async function checkAssertion(driver, options) {
-    try {
-        // Handle timeout option
-        if(options.timeout) {
-            await driver.wait(until.elementLocated(By.css(options.selector)), parseTimeout(options.timeout))
-        }
-        
-        // Get element and text content
-        let element = null
-        let text = ''
-        
-        try {
-            element = await driver.findElement(By.css(options.selector))
-            text = element ? (await element.getText()).trim() : ''
-        } catch (e) {
-            if (options.exists !== false) {
-                throw new Error(\`Element not found: \${options.selector}\`)
-            }
-        }
-        
-        // Perform assertions based on type
-        let result = true
-        let message = ''
-        
-        if (options.contains) {
-            result = text.includes(options.contains)
-            message = \`Expected text to contain "\${options.contains}", but got: "\${text}"\`
-        } else if (options.equals) {
-            result = text === options.equals
-            message = \`Expected text to equal "\${options.equals}", but got: "\${text}"\`
-        } else if (options.matches) {
-            const regex = new RegExp(options.matches)
-            result = regex.test(text)
-            message = \`Expected text to match pattern \${regex}, but got: "\${text}"\`
-        } else if (options.hasOwnProperty('exists')) {
-            result = options.exists ? !!element : !element
-            message = \`Expected element to \${options.exists ? 'exist' : 'not exist'}\`
-        } else if (options.visible !== undefined) {
-            const isVisible = element ? await element.isDisplayed() : false
-            result = options.visible ? isVisible : !isVisible
-            message = \`Expected element to be \${options.visible ? 'visible' : 'hidden'}\`
-        }
-        
-        if (!result) {
-            console.error(\`❌ Assertion failed: \${message}\`)
-            if (options.throwOnFail !== false) {
-                throw new Error(\`Assertion failed: \${message}\`)
-            }
-        } else {
-            console.log(\`✅ Assertion passed: \${options.selector}\`)
-        }
-        
-        return result
-    } catch (error) {
-        console.error(\`❌ Assertion error: \${error.message}\`)
-        if (options.throwOnFail !== false) {
-            throw error
-        }
-        return false
-    }
-}
-`
     }
 }
 

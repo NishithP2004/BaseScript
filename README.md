@@ -21,7 +21,7 @@ BaseScript is a modern browser automation framework that compiles YAML configura
 - **📸 Screenshot Gallery**: Capture and manage screenshots during automation
 - **🔧 Code Compilation**: View compiled JavaScript output 
 - **🎨 Modern Web Interface**: Dark/light theme with glassmorphism design
-- **🐳 Docker Ready**: Complete containerized setup with Docker Compose
+- **🐳 Docker Ready**: Complete containerized setup with Docker Compose and nginx reverse proxy
 - **⚡ Redis Integration**: Fast caching and browser state management
 - **📊 Feature Support Dashboard**: Visual feedback on CSS feature usage
 - **💻 CLI Support**: Command-line interface for script execution and compilation
@@ -46,28 +46,36 @@ BaseScript's core innovation is its integration with **Baseline data** - a compr
 
 ## 🏗️ Architecture
 
-BaseScript consists of four main components:
+BaseScript consists of five main components orchestrated through an nginx reverse proxy:
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Playground    │────│    Compiler     │────│     Browser     │
-│  (React SPA)    │    │  (Express API)  │    │  (Chrome + VNC) │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                        │                        │
-         └────────────────────────┼────────────────────────┘
-                                  │
-                         ┌─────────────────┐
-                         │      Redis      │
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│      nginx      │────│   Playground    │────│    Compiler     │────│     Browser     │
+│ (Reverse Proxy) │    │  (React SPA)    │    │  (Express API)  │    │ (Chrome + VNC)  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                        │                        │                        │
+         └────────────────────────┼────────────────────────┼────────────────────────┘
+                                  │                        │
+                         ┌─────────────────┐               │
+                         │      Redis      │───────────────┘
                          │     (Cache)     │
                          └─────────────────┘
 ```
 
 ### Components
 
-1. **Playground** - Web-based IDE for writing and testing automation scripts
-2. **Compiler** - Parses YAML and compiles to framework-specific JavaScript
-3. **Browser** - Containerized Chrome with VNC access for live previews
-4. **Redis** - Handles browser state and WebSocket URL management
+1. **nginx** - Reverse proxy handling routing and WebSocket connections
+2. **Playground** - Web-based IDE for writing and testing automation scripts
+3. **Compiler** - Parses YAML and compiles to framework-specific JavaScript
+4. **Browser** - Containerized Chrome with VNC access for live previews
+5. **Redis** - Handles browser state and WebSocket URL management
+
+### Routing Architecture
+
+The nginx reverse proxy handles:
+- **`/`** → Playground frontend (React SPA)
+- **`/api/*`** → Compiler backend (Express API)
+- **`/vnc/*`** → Browser VNC interface
 
 ## 🚀 Quick Start
 
@@ -89,11 +97,14 @@ cd BaseScript
 docker-compose up -d
 ```
 
-3. Access the playground:
-- **Web Interface**: http://localhost
-- **API**: http://localhost:3000
-- **VNC**: http://localhost:7900
-- **Chrome DevTools**: http://localhost:8080
+3. Access the application:
+- **Web Interface**: http://localhost (nginx proxy)
+- **VNC Browser**: http://localhost/vnc
+- **Direct API**: http://localhost/api
+- **Direct Chrome DevTools**: http://localhost:9222
+- **Caddy Proxy to Chrome**: http://localhost:8080
+- **Direct VNC**: http://localhost:7900
+- **Redis**: http://localhost:6379
 
 ### CLI Usage
 
@@ -209,37 +220,42 @@ browser:
 
 ## 🔧 API Endpoints
 
-### Compiler Service (Port 3000)
+### Via nginx Reverse Proxy
+
+All API requests should be made through the nginx proxy:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/` | Service status |
-| `POST` | `/run` | Compile and execute script |
-| `GET` | `/screenshots` | List available screenshots |
-| `GET` | `/screenshots/:filename` | Download screenshot file |
-| `DELETE` | `/screenshots/:filename` | Delete a screenshot |
+| `GET` | `/api/` | Service status |
+| `POST` | `/api/run` | Compile and execute script |
+| `GET` | `/api/screenshots` | List available screenshots |
+| `GET` | `/api/screenshots/:filename` | Download screenshot file |
+| `DELETE` | `/api/screenshots/:filename` | Delete a screenshot |
 
 ### Example Usage
 
 ```bash
-# Execute a script
-curl -X POST http://localhost:3000/run \
+# Execute a script (via nginx proxy)
+curl -X POST http://localhost/api/run \
   -H "Content-Type: text/plain" \
   -d @script.yaml
 
 # List screenshots
-curl http://localhost:3000/screenshots
+curl http://localhost/api/screenshots
 
 # Download screenshot
-curl http://localhost:3000/screenshot.png --output screenshot.png
+curl http://localhost/api/screenshots/screenshot.png --output screenshot.png
 ```
 
 ## 🐳 Docker Configuration
 
 ### Environment Variables
 
+#### nginx
+- Uses `./nginx/default.conf` for routing configuration
+
 #### Playground
-- `VITE_BACKEND_URL` - Backend API URL (default: `http://localhost:3000`)
+- `VITE_BACKEND_URL` - Backend API URL (default: `/api` via nginx proxy)
 
 #### Compiler
 - `PORT` - Server port (default: `3000`)
@@ -247,21 +263,55 @@ curl http://localhost:3000/screenshot.png --output screenshot.png
 - `REDIS_PORT` - Redis port (default: `6379`)
 
 #### Browser
-- `REDIS_HOST` - Redis hostname
-- `REDIS_PORT` - Redis port
+- `REDIS_HOST` - Redis hostname (default: `redis`)
+- `REDIS_PORT` - Redis port (default: `6379`)
 - `ENABLE_RECORDING` - Enable screen recording (default: `false`)
 - `RTMP_URL` - RTMP stream URL for recording
+
+### nginx Configuration
+
+The nginx reverse proxy is configured with:
+
+```nginx
+# Main application
+location / {
+    proxy_pass http://playground:80;
+    # WebSocket support for Socket.IO
+}
+
+# API routes
+location /api/ {
+    proxy_pass http://compiler:3000/;
+    rewrite /api/(.*) /$1 break;
+    # WebSocket support for real-time features
+}
+
+# VNC access
+location /vnc/ {
+    proxy_pass http://browser:7900/;
+    # WebSocket support for VNC
+}
+```
 
 ### Custom docker-compose.yml
 
 ```yaml
 services:
-  playground:
-    build: ./playground
+  nginx:
+    image: nginx:latest
     ports:
       - "80:80"
+    volumes:
+      - "./nginx/default.conf:/etc/nginx/conf.d/default.conf"
+    depends_on:
+      - compiler
+      - playground
+      - browser
+
+  playground:
+    build: ./playground
     environment:
-      - VITE_BACKEND_URL=http://localhost:3000
+      - VITE_BACKEND_URL=/api
 
   compiler:
     build: ./compiler
@@ -269,21 +319,29 @@ services:
       - "3000:3000"
     environment:
       - REDIS_HOST=redis
-      - REDIS_PORT=6379
 
   browser:
     build: ./browser
     ports:
       - "9222:9222"
       - "7900:7900"
+      - "4444:4444"
     environment:
       - REDIS_HOST=redis
-      - ENABLE_RECORDING=true
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
+
+networks:
+  bs-net:
+    driver: bridge
 ```
 
 ## 🛠️ Development
@@ -292,7 +350,9 @@ services:
 
 ```
 BaseScript/
-├── playground/          # React frontend
+├── nginx/              # nginx reverse proxy config
+│   └── default.conf    # Routing configuration
+├── playground/         # React frontend
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── Playground.jsx
@@ -300,11 +360,11 @@ BaseScript/
 │   │   ├── config.js
 │   │   └── examples.js
 │   └── package.json
-├── compiler/           # Node.js backend
-│   ├── compiler.js     # Main compilation logic
-│   ├── parser.js       # YAML parsing and validation
-│   ├── server.js       # Express server
-│   ├── cli.js          # Command-line interface
+├── compiler/          # Node.js backend
+│   ├── compiler.js    # Main compilation logic
+│   ├── parser.js      # YAML parsing and validation
+│   ├── server.js      # Express server
+│   ├── cli.js         # Command-line interface
 │   └── package.json
 ├── browser/           # Chrome container
 │   ├── Dockerfile
@@ -340,8 +400,10 @@ BaseScript/
 docker-compose logs -f
 
 # View specific service logs
+docker-compose logs -f nginx
 docker-compose logs -f compiler
 docker-compose logs -f browser
+docker-compose logs -f playground
 ```
 
 ### Redis Monitoring
@@ -359,9 +421,20 @@ GET CHROME_CDP_URL
 
 ### VNC Access
 
-Access the browser directly via VNC:
-- URL: `http://localhost:7900`
+Access the browser directly via:
+- **Via nginx proxy**: `http://localhost/vnc` (recommended)
+- **Direct access**: `http://localhost:7900`
 - Password: `secret`
+
+### nginx Access Logs
+
+```bash
+# View nginx access logs
+docker-compose logs nginx
+
+# Follow nginx logs in real-time
+docker-compose logs -f nginx
+```
 
 ## 📚 Documentation
 
