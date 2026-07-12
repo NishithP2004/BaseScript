@@ -4,17 +4,18 @@ import {
   TrashIcon, 
   ArrowDownIcon, 
   ArrowUpIcon,
-  PlayIcon,
-  StopIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
-  faLock, 
-  faLockOpen, 
-  faTimes, 
-  faFlagCheckered, 
-  faPaperPlane 
+  faLock,
+  faLockOpen,
+  faFlagCheckered,
+  faPaperPlane,
+  faTerminal,
+  faCircleExclamation,
+  faCircleCheck,
+  faBroom
 } from '@fortawesome/free-solid-svg-icons';
 
 // Global socket instance for persistent connection
@@ -81,7 +82,7 @@ const removeSocketListener = (event, callback) => {
   }
 };
 
-const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
+const Terminal = ({ isDarkMode, isOpen, onClose }) => {
   const [output, setOutput] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
@@ -180,6 +181,7 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
 
   const formatOutput = (content) => {
     // Handle ANSI escape codes for colors
+    /* eslint-disable no-control-regex */
     return content
       .replace(/\x1b\[31m/g, '<span class="text-red-400">') // Red
       .replace(/\x1b\[32m/g, '<span class="text-green-400">') // Green
@@ -192,6 +194,7 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
       .replace(/\x1b\[1m/g, '<span class="font-bold">') // Bold
       .replace(/\x1b\[4m/g, '<span class="underline">') // Underline
       .replace(/\n/g, '<br/>');
+    /* eslint-enable no-control-regex */
   };
 
   const getOutputTypeStyles = (type) => {
@@ -205,28 +208,21 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
     }
   };
 
-  const glassPanelClasses = isDarkMode
-    ? "backdrop-blur-xl bg-slate-900/70 border border-slate-800/70 shadow-xl"
-    : "backdrop-blur-xl bg-white/85 border border-slate-200/70 shadow-lg";
-
   const primaryTextColor = isDarkMode ? "text-slate-100" : "text-slate-900";
-  const secondaryTextColor = isDarkMode ? "text-slate-300" : "text-slate-600";
   const tertiaryTextColor = isDarkMode ? "text-slate-400" : "text-slate-500";
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose}></div>
+      <div className="absolute inset-0 app-modal-backdrop" onClick={onClose}></div>
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className={`${glassPanelClasses} w-[90vw] h-[80vh] rounded-2xl overflow-hidden shadow-2xl relative`}>
+        <div className={`${isDarkMode ? "app-modal-dark" : "app-modal-light"} w-[min(1180px,94vw)] h-[78vh] rounded-2xl overflow-hidden relative flex flex-col`}>
           {/* Terminal Header */}
-          <div className={`flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? "border-slate-800/60" : "border-slate-200/70"}`}>
+          <div className={`flex items-center justify-between gap-4 px-5 py-4 border-b shrink-0 ${isDarkMode ? "border-indigo-500/20" : "border-slate-200/70"}`}>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-400/25 flex items-center justify-center text-cyan-300">
+                <FontAwesomeIcon icon={faTerminal} />
               </div>
               <div>
                 <h3 className={`text-lg font-semibold ${primaryTextColor}`}>
@@ -238,7 +234,7 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
               </div>
             </div>
             
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               {/* Connection Status */}
               <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-sm ${
                 isConnected 
@@ -250,22 +246,18 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
               </div>
 
               {/* Terminal Controls */}
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={clearTerminal}
-                  className={`p-2 rounded-lg ${glassPanelClasses} ${
-                    isDarkMode ? "text-slate-300 hover:text-red-300" : "text-slate-600 hover:text-red-600"
-                  } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
+                  className="icon-button hover:!text-rose-300"
                   title="Clear Terminal"
                 >
-                  <TrashIcon className="w-4 h-4" />
+                  <FontAwesomeIcon icon={faBroom} />
                 </button>
                 
                 <button
                   onClick={scrollToTop}
-                  className={`p-2 rounded-lg ${glassPanelClasses} ${
-                    isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"
-                  } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
+                  className="icon-button"
                   title="Scroll to Top"
                 >
                   <ArrowUpIcon className="w-4 h-4" />
@@ -273,9 +265,7 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
                 
                 <button
                   onClick={scrollToBottom}
-                  className={`p-2 rounded-lg ${glassPanelClasses} ${
-                    isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"
-                  } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
+                  className="icon-button"
                   title="Scroll to Bottom"
                 >
                   <ArrowDownIcon className="w-4 h-4" />
@@ -283,21 +273,15 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
 
                 <button
                   onClick={() => setIsAutoScroll(!isAutoScroll)}
-                  className={`p-2 rounded-lg ${glassPanelClasses} ${
-                    isAutoScroll 
-                      ? isDarkMode ? "text-green-300" : "text-green-600"
-                      : isDarkMode ? "text-slate-300 hover:text-sky-300" : "text-slate-600 hover:text-sky-600"
-                  } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
+                  className={`icon-button ${isAutoScroll ? "!text-emerald-300 !border-emerald-500/40" : ""}`}
                   title={isAutoScroll ? "Auto-scroll On" : "Auto-scroll Off"}
                 >
-                  {isAutoScroll ? "🔒" : "🔓"}
+                  <FontAwesomeIcon icon={isAutoScroll ? faLock : faLockOpen} />
                 </button>
 
                 <button
                   onClick={onClose}
-                  className={`p-2 rounded-lg ${glassPanelClasses} ${
-                    isDarkMode ? "text-slate-300 hover:text-red-300" : "text-slate-600 hover:text-red-600"
-                  } transition-all transform hover:scale-105 active:scale-95 cursor-pointer`}
+                  className="icon-button hover:!text-rose-300"
                   title="Close Terminal"
                 >
                   <XMarkIcon className="w-4 h-4" />
@@ -307,12 +291,13 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
           </div>
 
           {/* Terminal Body */}
-          <div className={`h-full ${isDarkMode ? "bg-slate-950" : "bg-slate-50"} p-4`}>
+          <div className={`flex-1 min-h-0 ${isDarkMode ? "bg-[#030611]" : "bg-slate-50"} p-3`}>
             <div 
               ref={terminalRef}
-              className={`h-full overflow-y-auto font-mono text-sm ${
+              data-testid="terminal-scroll-region"
+              className={`terminal-scroll h-full overflow-y-auto rounded-xl border p-2 font-mono text-[13px] ${
                 isDarkMode ? "text-green-400" : "text-green-600"
-              } leading-relaxed`}
+              } ${isDarkMode ? "border-slate-800/80 bg-slate-950/70" : "border-slate-200 bg-white"} leading-relaxed`}
               style={{ 
                 fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
                 lineHeight: '1.5'
@@ -321,7 +306,9 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
               {output.length === 0 ? (
                 <div className={`flex items-center justify-center h-full ${tertiaryTextColor}`}>
                   <div className="text-center">
-                    <div className="text-4xl mb-4">🖥️</div>
+                    <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center mx-auto mb-5 text-2xl ${isDarkMode ? "bg-slate-900 border-slate-800 text-cyan-300" : "bg-blue-50 border-blue-100 text-blue-600"}`}>
+                      <FontAwesomeIcon icon={faTerminal} />
+                    </div>
                     <p className="text-lg font-medium mb-2">Terminal Ready</p>
                     <p className="text-sm">Waiting for process output...</p>
                   </div>
@@ -329,9 +316,9 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
               ) : (
                 <div className="space-y-1">
                   {output.map((line) => (
-                    <div 
+                    <div
                       key={line.id} 
-                      className={`flex items-start space-x-3 py-1 ${
+                      className={`group grid grid-cols-[74px_22px_1fr] gap-2 items-start px-3 py-2 rounded-lg border border-transparent ${isDarkMode ? "hover:border-slate-700/50 hover:bg-slate-900/70" : "hover:border-slate-200 hover:bg-slate-50"} ${
                         line.type === 'error' 
                           ? isDarkMode ? "bg-red-900/20" : "bg-red-50"
                           : line.type === 'exit'
@@ -342,8 +329,8 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
                       <span className={`text-xs ${tertiaryTextColor} mt-0.5 flex-shrink-0`}>
                         {line.timestamp}
                       </span>
-                      <span className={`text-xs ${getOutputTypeStyles(line.type)} flex-shrink-0`}>
-                        {line.type === 'error' ? '❌' : line.type === 'exit' ? '🏁' : '📤'}
+                      <span className={`text-xs ${getOutputTypeStyles(line.type)} flex-shrink-0 text-center`}>
+                        <FontAwesomeIcon icon={line.type === 'error' ? faCircleExclamation : line.type === 'exit' ? faFlagCheckered : line.content.toLowerCase().includes('success') ? faCircleCheck : faPaperPlane} />
                       </span>
                       <div 
                         className="flex-1 break-words"
@@ -359,7 +346,7 @@ const Terminal = ({ isDarkMode, isOpen, onClose, onToggle }) => {
           </div>
 
           {/* Terminal Footer */}
-          <div className={`px-6 py-3 border-t ${isDarkMode ? "border-slate-800/60" : "border-slate-200/70"} text-xs ${tertiaryTextColor}`}>
+          <div className={`px-5 py-3 border-t shrink-0 ${isDarkMode ? "border-indigo-500/20 bg-slate-950/45" : "border-slate-200/70"} text-xs ${tertiaryTextColor}`}>
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-4">
                 <span>Lines: {output.length}</span>

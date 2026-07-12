@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/playground/',
   plugins: [react(), tailwindcss()],
   define: {
     // Define environment variables with fallback

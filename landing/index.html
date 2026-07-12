@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="BaseScript is readable browser automation with built-in Baseline compatibility intelligence." />
+    <meta name="keywords" content="browser automation, Playwright, Puppeteer, Selenium, Baseline, web compatibility, YAML testing" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0b0c0c" />
+    <meta name="color-scheme" content="dark light" />
+
+    <link rel="canonical" href="/" />
+    <link rel="icon" href="/assets/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/favicon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BaseScript" />
+    <meta property="og:title" content="BaseScript — Baseline-aware browser automation" />
+    <meta property="og:description" content="Write readable browser flows once. Run them with Puppeteer, Playwright, or Selenium — with Baseline compatibility intelligence built in." />
+    <meta property="og:url" content="/" />
+    <meta property="og:image" content="/assets/social-banner.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="BaseScript — Automate the web. Know what will work." />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BaseScript — Baseline-aware browser automation" />
+    <meta name="twitter:description" content="Readable browser automation with Baseline compatibility intelligence." />
+    <meta name="twitter:image" content="/assets/social-banner.png" />
+    <meta name="twitter:image:alt" content="BaseScript — Automate the web. Know what will work." />
+
+    <title>BaseScript — Baseline-aware browser automation</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/script.js" defer></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "BaseScript",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web",
+        "description": "Readable browser automation with built-in Baseline compatibility intelligence.",
+        "codeRepository": "https://github.com/NishithP2004/BaseScript"
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" data-header>
+      <a class="wordmark" href="/" aria-label="BaseScript home">
+        <span class="wordmark-mark" aria-hidden="true">B/</span>
+        <span>BaseScript</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span></span><span></span>
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="https://github.com/NishithP2004/BaseScript#readme">Docs</a>
+        <a class="nav-cta" href="/playground/">Open playground <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero grain" aria-labelledby="hero-title">
+        <div class="hero-copy reveal">
+          <h1 id="hero-title">Automate the web.<br />Know what will work.</h1>
+          <p>Write readable browser flows once. Run them with Puppeteer, Playwright, or Selenium — with Baseline compatibility intelligence built in.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="/playground/">Open playground <span aria-hidden="true">→</span></a>
+            <a class="button button-secondary" href="https://github.com/NishithP2004/BaseScript">View on GitHub <span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+
+        <div class="demo reveal" data-delay="1" aria-label="Interactive BaseScript example">
+          <div class="demo-bar">
+            <button class="run-button" type="button" data-run>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5 13 8l-9 5.5z" /></svg>
+              <span data-run-label>Run</span>
+            </button>
+            <p class="run-status" data-status><span class="status-dot"></span><span>Ready to run</span></p>
+            <div class="window-controls" aria-hidden="true"><i></i><i></i><i></i></div>
+          </div>
+          <div class="demo-grid">
+            <div class="editor-pane">
+              <div class="pane-label"><span>flow.bs</span><span>YAML</span></div>
+              <pre aria-label="BaseScript YAML example"><code><span class="line"><b>1</b><i>browser:</i></span>
+<span class="line"><b>2</b>  framework: <em>playwright</em></span>
+<span class="line"><b>3</b></span>
+<span class="line"><b>4</b><i>steps:</i></span>
+<span class="line active-line"><b>5</b>  - goto: <strong>https://example.com</strong></span>
+<span class="line"><b>6</b>  - screenshot: home.png</span>
+<span class="line"><b>7</b>  - <i>baseline_scan:</i></span>
+<span class="line"><b>8</b>      year: <strong>2024</strong></span></code></pre>
+            </div>
+            <div class="browser-pane">
+              <div class="browser-chrome"><span>‹</span><span>›</span><span>↻</span><div>https://example.com</div></div>
+              <div class="browser-page">
+                <div class="page-title">Example Domain</div>
+                <p>A sample page for a readable automation flow.</p>
+                <div class="scan-result" data-scan>
+                  <div class="scan-heading"><span class="check">✓</span><div><strong>Baseline scan: 2024</strong><small>All checked features meet the target.</small></div></div>
+                  <ul>
+                    <li><code>dialog.showModal</code><span>Baseline 2020</span></li>
+                    <li><code>fetch</code><span>Baseline 2017</span></li>
+                    <li><code>URLPattern</code><span>Baseline 2023</span></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-stripe" aria-hidden="true"></div>
+      </section>
+
+      <section class="engines grain-light" id="features" aria-labelledby="engines-title">
+        <div class="section-intro reveal">
+          <h2 id="engines-title">One script.<br />Multiple engines.</h2>
+          <p>Choose Puppeteer, Playwright, or Selenium without rewriting the flow.</p>
+        </div>
+        <div class="engine-flow reveal" data-delay="1">
+          <div class="paper-code" aria-label="Example BaseScript flow">
+            <div class="file-fold" aria-hidden="true"></div>
+            <span class="code-comment"># checkout.bs</span>
+            <code><b>browser:</b><br />&nbsp;&nbsp;framework: <em>playwright</em><br /><b>steps:</b><br />&nbsp;&nbsp;- goto: /checkout<br />&nbsp;&nbsp;- click: "#pay"<br />&nbsp;&nbsp;- assert: "Complete"</code>
+          </div>
+          <div class="engine-list" aria-label="Supported browser automation engines">
+            <div><span class="rail"></span><strong>Puppeteer</strong><i>→</i></div>
+            <div><span class="rail"></span><strong>Playwright</strong><i>→</i></div>
+            <div><span class="rail"></span><strong>Selenium</strong><i>→</i></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="compatibility grain" id="how-it-works" aria-labelledby="compat-title">
+        <div class="compat-copy reveal">
+          <h2 id="compat-title">Compatibility,<br />in the loop.</h2>
+          <p>BaseScript scans the page as it runs, flags features outside your Baseline target, and keeps the result next to the step that found it.</p>
+          <ol class="process-list">
+            <li><span>01</span><strong>Write the flow</strong></li>
+            <li><span>02</span><strong>Run the browser</strong></li>
+            <li><span>03</span><strong>Review Baseline</strong></li>
+          </ol>
+        </div>
+        <div class="result-panel reveal" data-delay="1">
+          <div class="result-code">
+            <div class="panel-title">flow.bs</div>
+            <pre><code><span>1</span> - <b>goto:</b> /app
+<span>2</span> - <b>click:</b> "#open-modal"
+<span>3</span> - <b>assert:</b> dialog
+<span>4</span>     .toBeVisible()
+<span>5</span> - <b>script:</b> |
+<span>6</span>     await fetch('/api')
+<span>7</span> - <b>baseline_scan:</b>
+<span>8</span>     year: 2024</code></pre>
+          </div>
+          <div class="baseline-results">
+            <div class="panel-title">Baseline results</div>
+            <div class="result-row"><span class="result-icon warn">!</span><div><code>dialog.showModal</code><small>Baseline 2020</small></div><i>›</i></div>
+            <div class="result-row"><span class="result-icon pass">✓</span><div><code>fetch</code><small>Baseline 2017</small></div><i>›</i></div>
+            <div class="result-row"><span class="result-icon pass">✓</span><div><code>URLPattern</code><small>Baseline 2023</small></div><i>›</i></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing grain-light" aria-labelledby="closing-title">
+        <div class="closing-copy reveal">
+          <h2 id="closing-title">The readable route to reliable automation.</h2>
+          <p>Write the flow in YAML, watch it run in a real browser, and see compatibility issues before they reach users.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="/playground/">Start in the playground <span aria-hidden="true">→</span></a>
+            <a class="button button-light" href="https://github.com/NishithP2004/BaseScript#readme">Read the docs <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="receipt-wrap reveal" data-delay="1">
+          <div class="closing-stripe" aria-hidden="true"></div>
+          <div class="receipt">
+            <p><span>$</span> basescript run flow.bs</p>
+            <hr />
+            <p><span>✓</span> compiled for Playwright</p>
+            <p><span>✓</span> browser flow complete</p>
+            <p><span>✓</span> Baseline scan attached</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer grain">
+      <a class="footer-wordmark" href="/">BaseScript</a>
+      <div class="footer-column"><h3>Product</h3><a href="/playground/">Playground</a><a href="https://github.com/NishithP2004/BaseScript/blob/main/docs/commands.md">Commands</a></div>
+      <div class="footer-column"><h3>Project</h3><a href="https://github.com/NishithP2004/BaseScript">GitHub</a><a href="https://github.com/NishithP2004/BaseScript/blob/main/LICENSE">License</a></div>
+      <p class="footer-signoff">Readable automation.<br />Baseline-aware.</p>
+    </footer>
+  </body>
+</html>

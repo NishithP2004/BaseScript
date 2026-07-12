@@ -119,10 +119,10 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose}></div>
+      <div className="absolute inset-0 app-modal-backdrop" onClick={onClose}></div>
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
-          className={`${glassPanelClasses} w-[90vw] h-[85vh] rounded-2xl overflow-hidden shadow-2xl relative`}
+          className={`${isDarkMode ? "app-modal-dark" : "app-modal-light"} w-[min(1180px,94vw)] h-[86vh] rounded-2xl overflow-hidden relative flex flex-col`}
         >
           {/* Header */}
           <div
@@ -159,7 +159,7 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
           </div>
 
           {/* Search Bar */}
-          <div className="px-6 py-4">
+          <div className="px-6 py-4 shrink-0 bg-slate-950/20">
             <div className="relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input
@@ -177,7 +177,7 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-hidden px-6 pb-6">
+          <div data-testid="screenshots-scroll-region" className="terminal-scroll flex-1 min-h-0 overflow-y-auto px-6 pb-6">
             {loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
@@ -220,11 +220,11 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 overflow-y-auto h-full">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pr-3 content-start">
                 {filteredScreenshots.map((filename) => (
                   <div
                     key={filename}
-                    className={`${glassPanelClasses} rounded-lg overflow-hidden group cursor-pointer transition-all transform hover:scale-105`}
+                    className={`${glassPanelClasses} rounded-xl overflow-hidden group cursor-pointer transition-all hover:-translate-y-1 hover:border-cyan-400/40 hover:shadow-lg hover:shadow-cyan-950/30`}
                     onClick={() => setSelectedImage(filename)}
                   >
                     <div className="aspect-square relative">

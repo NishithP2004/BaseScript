@@ -9,9 +9,17 @@ services:
       networks:
         - bs-net
       depends_on:
+        - landing
         - compiler
         - playground
         - browser
+
+    landing:
+      image: nishithp/basescript-landing
+      restart: unless-stopped
+      build: ./landing
+      networks:
+        - bs-net
 
     compiler:
       image: nishithp/basescript-compiler

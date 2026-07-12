@@ -2,7 +2,6 @@ import { VncScreen } from "react-vnc";
 import CodeMirror from "@uiw/react-codemirror";
 import { yaml } from "@codemirror/lang-yaml";
 import { javascript } from "@codemirror/lang-javascript";
-import { keymap } from "@codemirror/view";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { duotoneDark, duotoneLight } from "@uiw/codemirror-theme-duotone";
 import { githubLight } from "@uiw/codemirror-theme-github";
@@ -26,6 +25,8 @@ import { solarizedDark, solarizedLight } from "@uiw/codemirror-theme-solarized";
 import examples from "../examples";
 import ScreenshotsViewer from "./ScreenshotsViewer";
 import Terminal from "./Terminal";
+import ExamplesMenu from "./ExamplesMenu";
+import CommandLibrary from "./CommandLibrary";
 import { API_ENDPOINTS } from "../config";
 import { useAllPreferences } from "../hooks/usePreferences";
 import {
@@ -41,6 +42,12 @@ import {
   XMarkIcon,
   PhotoIcon,
   CommandLineIcon,
+  CodeBracketIcon,
+  CubeIcon,
+  BoltIcon,
+  DocumentTextIcon,
+  HashtagIcon,
+  BookOpenIcon,
 } from "@heroicons/react/24/outline";
 
 function Playground() {
@@ -124,6 +131,7 @@ steps:
   const [, setExecutionResult] = useState(null);
   const [, setExecutionError] = useState(null);
   const [compiledCode, setCompiledCode] = useState("");
+  const [showCommands, setShowCommands] = useState(false);
 
 
   // ESC key closes zoom
@@ -212,19 +220,43 @@ steps:
     }
   };
 
+  const insertCommand = (command) => {
+    setValue((current) => {
+      let next;
+      if (command.category === "setup") {
+        next = current.includes(`${command.name}:`) ? current : `${command.snippet}\n${current}`;
+      } else if (current.includes("steps:")) {
+        next = `${current.trimEnd()}\n${command.snippet}`;
+      } else {
+        next = `${current.trimEnd()}\nsteps:\n${command.snippet}`;
+      }
+      sessionStorage.setItem("playground-code", next);
+      return next;
+    });
+    setActiveTab("script");
+    setShowCommands(false);
+  };
+
+  const toggleColorMode = () => {
+    const nextIsDark = !isDarkMode;
+    setIsDarkMode(nextIsDark);
+    if (nextIsDark && selectedTheme.appearance === "light") setSelectedThemeId("dracula");
+    if (!nextIsDark && selectedTheme.appearance === "dark") setSelectedThemeId("vscodeLight");
+  };
+
   const editorTheme = useMemo(() => selectedTheme.theme, [selectedTheme]);
 
   const themeClasses = isDarkMode
-    ? "bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950"
-    : "bg-gradient-to-br from-slate-50 via-white to-slate-100";
+    ? "bg-[#070b16]"
+    : "bg-slate-100";
 
   const glassPanelClasses = isDarkMode
-    ? "backdrop-blur-xl bg-slate-900/70 border border-slate-800/70 shadow-xl"
-    : "backdrop-blur-xl bg-white/85 border border-slate-200/70 shadow-lg";
+    ? "bg-[#0d1323]/95 border border-slate-800/90 shadow-xl shadow-black/20"
+    : "bg-white border border-slate-200 shadow-lg shadow-slate-300/20";
 
   const accentTextGradient = isDarkMode
-    ? "from-sky-300 via-cyan-200 to-emerald-200"
-    : "from-sky-600 via-cyan-500 to-emerald-500";
+    ? "from-slate-100 to-slate-100"
+    : "from-slate-900 to-slate-900";
 
   const secondaryTextColor = isDarkMode ? "text-slate-300" : "text-slate-600";
   const tertiaryTextColor = isDarkMode ? "text-slate-400" : "text-slate-500";
@@ -241,15 +273,11 @@ steps:
     "data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-opacity='0.04'%3E%3Cpath d='M20 0H0v20H20V0ZM40 0H20v20H40V0ZM60 0H40v20H60V0ZM80 0H60v20H80V0ZM100 0H80v20H100V0ZM120 0H100v20H120V0ZM140 0H120v20H140V0ZM160 0H140v20H160V0ZM180 0H160v20H180V0ZM200 0H180v20H200V0ZM220 0H200v20H220V0ZM240 0H220v20H240V0ZM260 0H240v20H260V0ZM280 0H260v20H280V0ZM300 0H280v20H300V0ZM320 0H300v20H320V0ZM340 0H320v20H340V0ZM360 0H340v20H360V0ZM380 0H360v20H380V0ZM400 0H380v20H400V0Z'/%3E%3C/g%3E%3C/svg%3E";
 
   return (
-    <div className={`flex flex-col h-screen ${themeClasses}`}>
+    <div className={`magic-workspace ${isDarkMode ? "theme-dark" : "theme-light"} flex flex-col h-screen ${themeClasses}`}>
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div
-          className={`absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-radial ${overlayGradient} to-transparent animate-pulse`}
-        ></div>
-        <div
-          className={`absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-radial ${overlayGradientSecondary} to-transparent animate-pulse delay-1000`}
-        ></div>
+        <div className={`absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-radial ${overlayGradient} to-transparent opacity-50`}></div>
+        <div className={`absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-radial ${overlayGradientSecondary} to-transparent opacity-40`}></div>
         <div
           className="absolute inset-0 opacity-[0.15]"
           style={{ backgroundImage: `url(${backgroundGridPattern})` }}
@@ -257,15 +285,15 @@ steps:
       </div>
 
       {/* Glass Header */}
-      <div className={`relative z-10 flex items-center justify-between px-8 py-4 ${glassPanelClasses} ${primaryTextColor}`}>
+      <div className={`relative z-50 flex items-center justify-between px-6 py-3 ${glassPanelClasses} ${primaryTextColor}`}>
         <div className="flex items-center space-x-6">
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-xl">BS</span>
+            <div className="brand-orbit w-10 h-10 rounded-xl flex items-center justify-center shadow-md">
+              <span className="w-8 h-8 rounded-lg bg-[#0d1323] flex items-center justify-center text-white font-black text-sm tracking-tight">BS</span>
             </div>
             <div>
               <h1
-                className={`text-2xl font-bold bg-gradient-to-r bg-clip-text text-transparent ${accentTextGradient}`}
+                className={`text-xl font-semibold bg-gradient-to-r bg-clip-text text-transparent ${accentTextGradient}`}
               >
                 BaseScript Playground
               </h1>
@@ -295,48 +323,19 @@ steps:
           </div>
         </div>
 
-          <div className="flex items-center space-x-4">
-          {/* Example Scripts Dropdown */}
-          <select
-            onChange={(e) => loadExample(e.target.value)}
-            className={`px-3 py-2.5 text-sm rounded-lg ${
-              isDarkMode 
-                ? "bg-slate-800/80 text-slate-200 border-slate-700" 
-                : "bg-white/80 text-slate-700 border-slate-300"
-            } border focus:ring-2 focus:ring-sky-500 outline-none transition-all min-w-[120px]`}
-            defaultValue=""
-            title="Load Example"
-          >
-            <option 
-              value="" 
-              disabled
-              className={isDarkMode ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700"}
-            >
-              📚 Examples
-            </option>
-            <option 
-              value="basic"
-              className={isDarkMode ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700"}
-            >
-              🚀 Basic
-            </option>
-            <option 
-              value="form"
-              className={isDarkMode ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700"}
-            >
-              📝 Form
-            </option>
-            <option 
-              value="testing"
-              className={isDarkMode ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700"}
-            >
-              🧪 Test
-            </option>
-          </select>
+          <div className="flex items-center space-x-3">
+          <ExamplesMenu onSelect={loadExample} isDarkMode={isDarkMode} />
 
 
           {/* Control Buttons */}
           <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowCommands(true)}
+              className={`p-3 rounded-lg ${glassPanelClasses} ${isDarkMode ? "text-slate-300 hover:text-blue-300" : "text-slate-600 hover:text-blue-600"} transition-all transform hover:scale-105 active:scale-95`}
+              title="Open command library"
+            >
+              <BookOpenIcon className="w-5 h-5" />
+            </button>
             <button
               onClick={copyToClipboard}
               className={`p-3 rounded-lg ${glassPanelClasses} ${
@@ -383,7 +382,7 @@ steps:
 
             <div className={`relative group z-40 ${glassPanelClasses} rounded-lg`}>
               <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
+                onClick={toggleColorMode}
                 className={`p-3 ${
                   isDarkMode
                     ? "text-slate-200 hover:text-sky-300"
@@ -399,18 +398,20 @@ steps:
           {!isRunning ? (
             <button
               onClick={handleRun}
-              className="flex items-center space-x-2 px-4 py-3 bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-500 text-white rounded-lg hover:from-sky-500/90 hover:via-cyan-500/90 hover:to-emerald-500/90 transition-all transform hover:scale-105 active:scale-95 shadow-lg ml-2 cursor-pointer"
+              className="flex items-center gap-2 px-5 py-3 bg-[#4285F4] text-white font-semibold rounded-xl hover:bg-[#5b95f5] transition-colors shadow-lg shadow-blue-950/30 ml-2"
               title="Run Script"
             >
               <PlayIcon className="w-5 h-5" />
+              <span>Run</span>
             </button>
           ) : (
             <button
               onClick={handleStop}
-              className="flex items-center space-x-2 px-4 py-3 bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-white rounded-lg hover:from-rose-500/90 hover:via-orange-500/90 hover:to-amber-500/90 transition-all transform hover:scale-105 active:scale-95 shadow-lg ml-2 cursor-pointer"
+              className="flex items-center gap-2 px-5 py-3 bg-rose-500 text-white font-semibold rounded-lg hover:bg-rose-400 transition-colors shadow-lg shadow-rose-950/30 ml-2 cursor-pointer"
               title="Stop"
             >
               <StopIcon className="w-5 h-5" />
+              <span>Stop</span>
             </button>
           )}
         </div>
@@ -516,7 +517,7 @@ steps:
                     }`}
                     title="Script Editor"
                   >
-                    📝
+                    <CodeBracketIcon className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setActiveTab("compiled")}
@@ -534,7 +535,7 @@ steps:
                     } ${compiledCode ? 'cursor-pointer' : ''}`}
                     title="Compiled Code"
                   >
-                    🔧
+                    <CubeIcon className="w-5 h-5" />
                     {compiledCode && (
                       <span className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${
                         isDarkMode ? "bg-emerald-500" : "bg-emerald-600"
@@ -557,7 +558,7 @@ steps:
                   }`}
                   title={isRunning ? "Executing" : "Ready"}
                 >
-                  {isRunning ? "⚡" : "✅"}
+                  {isRunning ? <BoltIcon className="w-5 h-5" /> : <CheckIcon className="w-5 h-5" />}
                 </div>
                 <select
                   value={selectedThemeId}
@@ -639,7 +640,7 @@ steps:
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-6">
                 <span className="flex items-center space-x-1" title="Lines">
-                  <span>📝</span>
+                  <DocumentTextIcon className="w-4 h-4" />
                   <span>
                     {currentActiveTab === "script" 
                       ? value.split("\n").length 
@@ -648,7 +649,7 @@ steps:
                   </span>
                 </span>
                 <span className="flex items-center space-x-1" title="Characters">
-                  <span>💭</span>
+                  <HashtagIcon className="w-4 h-4" />
                   <span>
                     {currentActiveTab === "script" 
                       ? value.length 
@@ -657,7 +658,7 @@ steps:
                   </span>
                 </span>
                 <span className="flex items-center space-x-1" title={currentActiveTab === "script" ? "YAML" : "JavaScript"}>
-                  <span>🔧</span>
+                  <CodeBracketIcon className="w-4 h-4" />
                   <span>{currentActiveTab === "script" ? "YAML" : "JS"}</span>
                 </span>
               </div>
@@ -665,7 +666,7 @@ steps:
                 {isRunning && (
                   <div className="flex items-center space-x-2" title="Processing">
                     <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                    <span className="text-lg">⚡</span>
+                    <BoltIcon className="w-4 h-4 text-amber-400" />
                   </div>
                 )}
               </div>
@@ -737,9 +738,14 @@ steps:
         onClose={() => setShowTerminal(false)}
         isDarkMode={isDarkMode}
       />
+      <CommandLibrary
+        isOpen={showCommands}
+        onClose={() => setShowCommands(false)}
+        onInsert={insertCommand}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 }
 
 export default Playground;
-
