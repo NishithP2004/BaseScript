@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
+import { BACKEND_URL } from '../config';
 import { 
   TrashIcon, 
   ArrowDownIcon, 
@@ -22,17 +23,30 @@ import {
 let globalSocket = null;
 let socketListeners = new Map();
 
+const getSocketEndpoint = () => {
+  const backendUrl = new URL(BACKEND_URL, window.location.origin);
+  const backendPath = backendUrl.pathname.replace(/\/$/, '');
+
+  return {
+    origin: backendUrl.origin,
+    path: `${backendPath}/socket.io`,
+  };
+};
+
 // Initialize global socket connection
 const initializeSocket = () => {
   if (!globalSocket) {
+    const socketEndpoint = getSocketEndpoint();
     console.log('Terminal: Initializing global socket connection...');
-    globalSocket = io(window.location.href, {
+    globalSocket = io(socketEndpoint.origin, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      path: "/api/socket.io"
+      reconnectionDelayMax: 10000,
+      timeout: 10000,
+      path: socketEndpoint.path,
     });
 
     globalSocket.on('connect', () => {
@@ -48,6 +62,13 @@ const initializeSocket = () => {
       // Notify all listeners
       if (socketListeners.has('disconnect')) {
         socketListeners.get('disconnect').forEach(callback => callback(reason));
+      }
+    });
+
+    globalSocket.on('connect_error', (error) => {
+      console.warn('Terminal: Socket connection failed:', error.message);
+      if (socketListeners.has('connect_error')) {
+        socketListeners.get('connect_error').forEach(callback => callback(error));
       }
     });
 
@@ -84,7 +105,7 @@ const removeSocketListener = (event, callback) => {
 
 const Terminal = ({ isDarkMode, isOpen, onClose }) => {
   const [output, setOutput] = useState([]);
-  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
   const [isAutoScroll, setIsAutoScroll] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const terminalRef = useRef(null);
@@ -95,17 +116,24 @@ const Terminal = ({ isDarkMode, isOpen, onClose }) => {
     const socket = initializeSocket();
     
     // Set initial connection status
-    setIsConnected(socket.connected);
+    setConnectionStatus(socket.connected ? 'connected' : 'connecting');
+    if (!socket.connected && !socket.active) {
+      socket.connect();
+    }
 
     // Define event handlers
     const handleConnect = () => {
       console.log('Terminal: Connected to server');
-      setIsConnected(true);
+      setConnectionStatus('connected');
     };
 
     const handleDisconnect = (reason) => {
       console.log('Terminal: Disconnected from server:', reason);
-      setIsConnected(false);
+      setConnectionStatus(reason === 'io server disconnect' ? 'disconnected' : 'connecting');
+    };
+
+    const handleConnectError = () => {
+      setConnectionStatus(globalSocket?.active ? 'connecting' : 'disconnected');
     };
 
     const handleOutput = (data) => {
@@ -142,6 +170,7 @@ const Terminal = ({ isDarkMode, isOpen, onClose }) => {
     // Add listeners to global socket
     addSocketListener('connect', handleConnect);
     addSocketListener('disconnect', handleDisconnect);
+    addSocketListener('connect_error', handleConnectError);
     addSocketListener('output', handleOutput);
     addSocketListener('error-stream', handleError);
     addSocketListener('process-exit', handleExit);
@@ -150,6 +179,7 @@ const Terminal = ({ isDarkMode, isOpen, onClose }) => {
     return () => {
       removeSocketListener('connect', handleConnect);
       removeSocketListener('disconnect', handleDisconnect);
+      removeSocketListener('connect_error', handleConnectError);
       removeSocketListener('output', handleOutput);
       removeSocketListener('error-stream', handleError);
       removeSocketListener('process-exit', handleExit);
@@ -210,6 +240,8 @@ const Terminal = ({ isDarkMode, isOpen, onClose }) => {
 
   const primaryTextColor = isDarkMode ? "text-slate-100" : "text-slate-900";
   const tertiaryTextColor = isDarkMode ? "text-slate-400" : "text-slate-500";
+  const isConnected = connectionStatus === 'connected';
+  const isConnecting = connectionStatus === 'connecting';
 
   if (!isOpen) return null;
 
@@ -237,12 +269,20 @@ const Terminal = ({ isDarkMode, isOpen, onClose }) => {
             <div className="flex items-center gap-2 flex-wrap justify-end">
               {/* Connection Status */}
               <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-sm ${
-                isConnected 
+                isConnected
                   ? isDarkMode ? "bg-green-900/50 text-green-200" : "bg-green-100 text-green-800"
-                  : isDarkMode ? "bg-red-900/50 text-red-200" : "bg-red-100 text-red-800"
+                  : isConnecting
+                    ? isDarkMode ? "bg-amber-900/40 text-amber-200" : "bg-amber-100 text-amber-800"
+                    : isDarkMode ? "bg-red-900/50 text-red-200" : "bg-red-100 text-red-800"
               }`}>
-                <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"}`}></div>
-                <span>{isConnected ? "Connected" : "Disconnected"}</span>
+                <div className={`w-2 h-2 rounded-full ${
+                  isConnected
+                    ? "bg-green-500"
+                    : isConnecting
+                      ? "bg-amber-500 animate-pulse"
+                      : "bg-red-500"
+                }`}></div>
+                <span>{isConnected ? "Connected" : isConnecting ? "Connecting" : "Disconnected"}</span>
               </div>
 
               {/* Terminal Controls */}
@@ -355,7 +395,9 @@ const Terminal = ({ isDarkMode, isOpen, onClose }) => {
               </div>
               <div className="flex items-center space-x-2">
                 <span>Socket.IO</span>
-                <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}></div>
+                <div className={`w-2 h-2 rounded-full ${
+                  isConnected ? "bg-green-500" : isConnecting ? "bg-amber-500 animate-pulse" : "bg-red-500"
+                }`}></div>
               </div>
             </div>
           </div>

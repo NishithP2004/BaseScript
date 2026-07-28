@@ -489,55 +489,61 @@ steps:
         >
           {/* Tab Header */}
           <div className={`px-6 py-4 border-b ${isDarkMode ? "border-slate-800/60" : "border-slate-200/70"}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-6">
-                <div>
-                  <h3 className={`text-lg font-semibold ${primaryTextColor}`}>
+            <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="min-w-0 overflow-hidden">
+                  <h3 className={`truncate text-lg font-semibold ${primaryTextColor}`}>
                     Code Editor
                   </h3>
-                  <p className={`text-sm mt-1 ${tertiaryTextColor}`}>
+                  <p className={`mt-1 truncate text-sm ${tertiaryTextColor}`}>
                     Write and view your automation scripts
                   </p>
                 </div>
                 
                 {/* Tab Navigation */}
-                <div className={`flex items-center space-x-1 rounded-lg p-1 ${
-                  isDarkMode ? "bg-slate-800/50" : "bg-slate-200/20"
+                <div className={`flex h-10 items-center gap-1 rounded-xl border p-1 shrink-0 ${
+                  isDarkMode
+                    ? "border-slate-700/80 bg-slate-950/55"
+                    : "border-slate-200 bg-slate-100/80"
                 }`}>
                   <button
+                    type="button"
                     onClick={() => setActiveTab("script")}
-                    className={`p-3 rounded-md transition-all cursor-pointer ${
+                    className={`flex h-8 w-9 items-center justify-center rounded-lg transition-all cursor-pointer ${
                       currentActiveTab === "script"
                         ? isDarkMode
-                          ? "bg-slate-700 text-white shadow-sm"
-                          : "bg-white text-slate-900 shadow-sm"
+                          ? "bg-blue-500/25 text-blue-100 ring-1 ring-inset ring-blue-400/35 shadow-sm"
+                          : "bg-white text-blue-700 ring-1 ring-inset ring-blue-200 shadow-sm"
                         : isDarkMode
-                        ? "text-slate-300 hover:text-slate-100"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
+                        : "text-slate-500 hover:bg-white/80 hover:text-slate-900"
                     }`}
                     title="Script Editor"
+                    aria-label="Show script editor"
                   >
-                    <CodeBracketIcon className="w-5 h-5" />
+                    <CodeBracketIcon className="w-[18px] h-[18px]" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setActiveTab("compiled")}
                     disabled={!compiledCode}
-                    className={`p-3 rounded-md transition-all relative ${
+                    className={`flex h-8 w-9 items-center justify-center rounded-lg transition-all relative ${
                       !compiledCode
                         ? "opacity-50 cursor-not-allowed"
                         : currentActiveTab === "compiled"
                         ? isDarkMode
-                          ? "bg-slate-700 text-white shadow-sm"
-                          : "bg-white text-slate-900 shadow-sm"
+                          ? "bg-violet-500/25 text-violet-100 ring-1 ring-inset ring-violet-400/35 shadow-sm"
+                          : "bg-white text-violet-700 ring-1 ring-inset ring-violet-200 shadow-sm"
                         : isDarkMode
-                        ? "text-slate-300 hover:text-slate-100"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
+                        : "text-slate-500 hover:bg-white/80 hover:text-slate-900"
                     } ${compiledCode ? 'cursor-pointer' : ''}`}
                     title="Compiled Code"
+                    aria-label="Show compiled code"
                   >
-                    <CubeIcon className="w-5 h-5" />
+                    <CubeIcon className="w-[18px] h-[18px]" />
                     {compiledCode && (
-                      <span className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${
+                      <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
                         isDarkMode ? "bg-emerald-500" : "bg-emerald-600"
                       }`}></span>
                     )}
@@ -545,20 +551,21 @@ steps:
                 </div>
               </div>
               
-              <div className="flex items-center space-x-3">
+              <div className="flex shrink-0 items-center gap-3 sm:justify-self-end">
                 <div
-                  className={`p-2 rounded-full ${
+                  className={`flex h-9 w-9 items-center justify-center rounded-full border shadow-sm ${
                     isRunning
                       ? isDarkMode
-                        ? "bg-yellow-900/50 text-yellow-200"
-                        : "bg-yellow-100 text-yellow-800"
+                        ? "border-amber-400/30 bg-amber-500/20 text-amber-200"
+                        : "border-amber-200 bg-amber-100 text-amber-800"
                       : isDarkMode
-                      ? "bg-green-900/50 text-green-200"
-                      : "bg-green-100 text-green-800"
+                      ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-200"
+                      : "border-emerald-200 bg-emerald-100 text-emerald-800"
                   }`}
                   title={isRunning ? "Executing" : "Ready"}
+                  aria-label={isRunning ? "Execution in progress" : "Editor ready"}
                 >
-                  {isRunning ? <BoltIcon className="w-5 h-5" /> : <CheckIcon className="w-5 h-5" />}
+                  {isRunning ? <BoltIcon className="w-[18px] h-[18px]" /> : <CheckIcon className="w-[18px] h-[18px]" />}
                 </div>
                 <select
                   value={selectedThemeId}
@@ -567,7 +574,7 @@ steps:
                     isDarkMode 
                       ? "bg-slate-800/80 text-slate-200 border-slate-700" 
                       : "bg-white/80 text-slate-700 border-slate-300"
-                  } border focus:ring-2 focus:ring-sky-500 outline-none transition-all min-w-[160px]`}
+                  } border focus:ring-2 focus:ring-sky-500 outline-none transition-all w-40 min-w-0 cursor-pointer`}
                   title="Editor theme"
                 >
                   {availableThemes.map((theme) => (

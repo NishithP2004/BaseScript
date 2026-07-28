@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PhotoIcon,
   ArrowDownTrayIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   XMarkIcon,
   MagnifyingGlassIcon,
   TrashIcon,
@@ -16,6 +18,11 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [scrollState, setScrollState] = useState({
+    canScrollUp: false,
+    canScrollDown: false,
+  });
+  const scrollRegionRef = useRef(null);
 
   const glassPanelClasses = isDarkMode
     ? "backdrop-blur-xl bg-slate-900/70 border border-slate-800/70 shadow-xl"
@@ -115,6 +122,77 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
     filename.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const updateScrollState = useCallback(() => {
+    const scrollRegion = scrollRegionRef.current;
+    if (!scrollRegion) return;
+
+    const nextScrollState = {
+      canScrollUp: scrollRegion.scrollTop > 1,
+      canScrollDown:
+        scrollRegion.scrollTop + scrollRegion.clientHeight <
+        scrollRegion.scrollHeight - 1,
+    };
+
+    setScrollState((currentScrollState) =>
+      currentScrollState.canScrollUp === nextScrollState.canScrollUp &&
+      currentScrollState.canScrollDown === nextScrollState.canScrollDown
+        ? currentScrollState
+        : nextScrollState
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const animationFrame = window.requestAnimationFrame(updateScrollState);
+    window.addEventListener("resize", updateScrollState);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [
+    error,
+    filteredScreenshots.length,
+    isOpen,
+    loading,
+    updateScrollState,
+  ]);
+
+  const scrollGallery = (direction) => {
+    const scrollRegion = scrollRegionRef.current;
+    if (!scrollRegion) return;
+
+    scrollRegion.scrollBy({
+      top: direction * Math.max(scrollRegion.clientHeight * 0.8, 240),
+      behavior: "smooth",
+    });
+  };
+
+  const handleGalleryKeyDown = (event) => {
+    const scrollRegion = scrollRegionRef.current;
+    if (!scrollRegion || event.target !== scrollRegion) return;
+
+    const scrollActions = {
+      ArrowDown: () => scrollGallery(1),
+      ArrowUp: () => scrollGallery(-1),
+      PageDown: () => scrollGallery(1),
+      PageUp: () => scrollGallery(-1),
+      Home: () => scrollRegion.scrollTo({ top: 0, behavior: "smooth" }),
+      End: () =>
+        scrollRegion.scrollTo({
+          top: scrollRegion.scrollHeight,
+          behavior: "smooth",
+        }),
+    };
+
+    const scrollAction = scrollActions[event.key];
+    if (scrollAction) {
+      event.preventDefault();
+      scrollAction();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -160,24 +238,71 @@ function ScreenshotsViewer({ isOpen, onClose, isDarkMode }) {
 
           {/* Search Bar */}
           <div className="px-6 py-4 shrink-0 bg-slate-950/20">
-            <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search screenshots..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full pl-10 pr-4 py-3 rounded-lg ${glassPanelClasses} ${
+            <div className="flex items-center gap-3">
+              <div className="relative min-w-0 flex-1">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search screenshots..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-3 rounded-lg ${glassPanelClasses} ${
+                    isDarkMode
+                      ? "text-slate-200 placeholder-slate-400"
+                      : "text-slate-700 placeholder-slate-500"
+                  } focus:ring-2 focus:ring-sky-500 outline-none transition-all`}
+                />
+              </div>
+              <div
+                className={`flex shrink-0 items-center rounded-lg border p-1 ${
                   isDarkMode
-                    ? "text-slate-200 placeholder-slate-400"
-                    : "text-slate-700 placeholder-slate-500"
-                } focus:ring-2 focus:ring-sky-500 outline-none transition-all`}
-              />
+                    ? "border-slate-700/80 bg-slate-900/70"
+                    : "border-slate-200 bg-white/80"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => scrollGallery(-1)}
+                  disabled={!scrollState.canScrollUp}
+                  className={`rounded-md p-2 transition-colors ${
+                    isDarkMode
+                      ? "text-slate-300 hover:bg-slate-800 hover:text-sky-300"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-sky-600"
+                  } disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent`}
+                  title="Scroll gallery up"
+                  aria-label="Scroll gallery up"
+                >
+                  <ChevronUpIcon className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollGallery(1)}
+                  disabled={!scrollState.canScrollDown}
+                  className={`rounded-md p-2 transition-colors ${
+                    isDarkMode
+                      ? "text-slate-300 hover:bg-slate-800 hover:text-sky-300"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-sky-600"
+                  } disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent`}
+                  title="Scroll gallery down"
+                  aria-label="Scroll gallery down"
+                >
+                  <ChevronDownIcon className="h-5 w-5" />
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Content */}
-          <div data-testid="screenshots-scroll-region" className="terminal-scroll flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+          <div
+            ref={scrollRegionRef}
+            data-testid="screenshots-scroll-region"
+            className="terminal-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 pb-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500"
+            onScroll={updateScrollState}
+            onKeyDown={handleGalleryKeyDown}
+            tabIndex={0}
+            role="region"
+            aria-label="Scrollable screenshot gallery"
+          >
             {loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
